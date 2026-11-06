@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Dati emoji
+        run: npm run emoji
+
+      - name: Formattazione
+        run: cargo fmt --all -- --check
+
+      - name: Build UI (serve a tauri-build)
+        run: npx vite build --config ui/vite.config.ts
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # I runner non hanno dispositivi audio: i test usano OfflineBus e una piattaforma finta.
+      - name: Test (e export dei tipi TS)
+        run: cargo test --workspace
+
+      - name: Tipi TS aggiornati
+        run: git diff --exit-code -- ui/src/lib/api/types
+
+      - name: svelte-check
+        run: npm run check

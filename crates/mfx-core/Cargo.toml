@@ -1,0 +1,22 @@
+[package]
+name = "mfx-core"
+description = "MicFX: thread engine, stato, config, comandi ed eventi (SPEC §4, §11, §12)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+mfx-audio.workspace = true
+mfx-library.workspace = true
+mfx-platform.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+crossbeam-channel.workspace = true
+memmap2.workspace = true
+uuid.workspace = true
+ts-rs.workspace = true

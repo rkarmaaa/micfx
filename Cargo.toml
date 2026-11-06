@@ -1,0 +1,47 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+authors = ["Marco"]
+license = "LicenseRef-Proprietary"
+publish = false
+
+[workspace.dependencies]
+mfx-audio = { path = "crates/mfx-audio" }
+mfx-library = { path = "crates/mfx-library" }
+mfx-platform = { path = "crates/mfx-platform" }
+mfx-core = { path = "crates/mfx-core" }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+crossbeam-channel = "0.5"
+rtrb = "0.4"
+memmap2 = "0.9"
+uuid = { version = "1", features = ["v4"] }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+ts-rs = { version = "12.0", features = ["serde-json-impl", "no-serde-warnings"] }
+symphonia = { version = "0.6", default-features = false, features = ["mp3", "aac", "isomp4", "flac", "ogg", "vorbis", "wav", "pcm"] }
+rubato = "5.0"
+ebur128 = "0.1"
+assert_no_alloc = "1.1"
+criterion = "0.8"
+windows = "0.62"
+windows-core = "0.62"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev.package."*"]
+opt-level = 2

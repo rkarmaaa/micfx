@@ -1,0 +1,327 @@
+<script lang="ts">
+  // Griglia o elenco dei suoni. Clic = suona. Ctrl/Maiusc+clic = seleziona. Trascina = riordina
+  // o sposta in una cartella. Frecce, Invio, F2, Canc come in Esplora risorse.
+  import { app } from '../stores/app.svelte';
+  import { isTypingTarget } from '../util/keys';
+  import SoundItem from './SoundItem.svelte';
+
+  let container: HTMLElement;
+
+  type Drag = {
+    id: string;
+    ids: string[];
+    startX: number;
+    startY: number;
+    pointerId: number;
+    active: boolean;
+    x: number;
+    y: number;
+    target: { id: string; side: 'before' | 'after' } | null;
+    folder: string | null | undefined;
+  };
+  let drag = $state<Drag | null>(null);
+  let suppressClick = false;
+
+  const view = $derived(app.prefs.view);
+  const list = $derived(app.visible);
+
+  // Il cursore da tastiera segue la selezione e resta visibile.
+  $effect(() => {
+    const id = app.focusId;
+    if (!id || !container) return;
+    const el = container.querySelector<HTMLElement>(`[data-sound-id="${CSS.escape(id)}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'nearest' });
+    if (container.contains(document.activeElement) || document.activeElement === document.body) el.focus({ preventScroll: true });
+  });
+
+  function idFrom(e: Event): string | null {
+    return (e.target as HTMLElement).closest<HTMLElement>('[data-sound-id]')?.dataset.soundId ?? null;
+  }
+
+  function columns(): number {
+    const items = [...container.querySelectorAll<HTMLElement>('[data-sound-id]')];
+    if (view === 'list' || items.length < 2) return 1;
+    const top = items[0].offsetTop;
+    const n = items.findIndex((el) => el.offsetTop !== top);
+    return n === -1 ? items.length : n;
+  }
+
+  function openMenuAt(id: string, x: number, y: number) {
+    if (!app.selection.has(id)) app.select(id, 'single');
+    app.menu = { x, y, ids: app.targets(id) };
+  }
+
+  function onclick(e: MouseEvent) {
+    if (suppressClick) {
+      suppressClick = false;
+      return;
+    }
+    const id = idFrom(e);
+    if (!id) {
+      if (e.target === container) app.selection.clear();
+      return;
+    }
+    const action = (e.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
+    if (action) {
+      e.stopPropagation();
+      if (action === 'preview') app.preview(id);
+      else if (action === 'stop') app.stop(id);
+      else if (action === 'edit') app.editorId = id;
+      else if (action === 'menu') {
+        const r = (e.target as HTMLElement).getBoundingClientRect();
+        openMenuAt(id, r.left, r.bottom + 2);
+      }
+      return;
+    }
+    if (app.renamingId === id) return;
+    if (e.ctrlKey || e.metaKey) return app.select(id, 'toggle');
+    if (e.shiftKey) return app.select(id, 'range');
+    app.select(id, 'single');
+    app.play(id);
+  }
+
+  function oncontextmenu(e: MouseEvent) {
+    const id = idFrom(e);
+    if (!id) return;
+    e.preventDefault();
+    openMenuAt(id, e.clientX, e.clientY);
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    if (isTypingTarget(e.target)) return;
+    const ids = list.map((s) => s.id);
+    if (!ids.length) return;
+    const cur = app.focusId && ids.includes(app.focusId) ? ids.indexOf(app.focusId) : -1;
+    const go = (i: number) => {
+      e.preventDefault();
+      const j = Math.max(0, Math.min(ids.length - 1, i));
+      if (e.shiftKey) app.select(ids[j], 'range');
+      else if (e.ctrlKey) app.focusId = ids[j];
+      else app.select(ids[j], 'single');
+    };
+    const cols = columns();
+    const rows = Math.max(1, Math.floor(container.clientHeight / ((container.querySelector('[data-sound-id]') as HTMLElement)?.offsetHeight || 40)));
+    switch (e.key) {
+      case 'ArrowRight':
+        if (view === 'list') return;
+        return go(cur + 1);
+      case 'ArrowLeft':
+        if (view === 'list') return;
+        return go(Math.max(0, cur - 1));
+      case 'ArrowDown':
+        return go(cur === -1 ? 0 : cur + cols);
+      case 'ArrowUp':
+        return go(cur - cols);
+      case 'Home':
+        return go(0);
+      case 'End':
+        return go(ids.length - 1);
+      case 'PageDown':
+        return go(cur + cols * rows);
+      case 'PageUp':
+        return go(cur - cols * rows);
+    }
+    const id = cur >= 0 ? ids[cur] : null;
+    if (!id) return;
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      app.editorId = id;
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (e.shiftKey) app.preview(id);
+      else app.play(id);
+    } else if (e.key === 'F2') {
+      e.preventDefault();
+      app.renamingId = id;
+    } else if (e.key === 'Delete') {
+      e.preventDefault();
+      app.deleteSounds(app.targets(id));
+    } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
+      e.preventDefault();
+      const r = container.querySelector(`[data-sound-id="${CSS.escape(id)}"]`)!.getBoundingClientRect();
+      openMenuAt(id, r.left + 12, r.top + 12);
+    } else if ((e.key === 'e' || e.key === 'E') && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      const r = container.querySelector(`[data-sound-id="${CSS.escape(id)}"]`)!.getBoundingClientRect();
+      app.emojiTarget = { soundId: id, x: r.left, y: r.bottom + 4 };
+    } else if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      app.selection.clear();
+      ids.forEach((x) => app.selection.add(x));
+    } else if (e.key === 'Escape' && app.selection.size > 1) {
+      e.preventDefault();
+      e.stopPropagation();
+      app.selection.clear();
+      app.selection.add(id);
+    }
+  }
+
+  // ------------------------------------------------------------ trascinamento (pointer, non HTML5:
+  // su Windows il drop dei file di Tauri disattiva il drag & drop HTML5 nella WebView)
+
+  function onpointerdown(e: PointerEvent) {
+    if (e.button !== 0 || app.renamingId) return;
+    const id = idFrom(e);
+    if (!id || (e.target as HTMLElement).closest('[data-action], input')) return;
+    drag = {
+      id,
+      ids: app.selection.has(id) ? [...app.selection] : [id],
+      startX: e.clientX,
+      startY: e.clientY,
+      pointerId: e.pointerId,
+      active: false,
+      x: e.clientX,
+      y: e.clientY,
+      target: null,
+      folder: undefined,
+    };
+  }
+
+  function onpointermove(e: PointerEvent) {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    if (!drag.active) {
+      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 6) return;
+      drag.active = true;
+      container.setPointerCapture(e.pointerId);
+    }
+    const under = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const folderEl = under?.closest<HTMLElement>('[data-folder-drop]');
+    if (folderEl) {
+      drag.folder = folderEl.dataset.folderDrop === 'all' ? null : folderEl.dataset.folderDrop!;
+      drag.target = null;
+      return;
+    }
+    drag.folder = undefined;
+    const item = under?.closest<HTMLElement>('[data-sound-id]');
+    if (!item || drag.ids.includes(item.dataset.soundId!) || drag.ids.length > 1) {
+      drag.target = null;
+      return;
+    }
+    const r = item.getBoundingClientRect();
+    const after = view === 'grid' ? e.clientX > r.left + r.width / 2 : e.clientY > r.top + r.height / 2;
+    drag.target = { id: item.dataset.soundId!, side: after ? 'after' : 'before' };
+  }
+
+  function onpointerup(e: PointerEvent) {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const d = drag;
+    drag = null;
+    if (!d.active) return;
+    suppressClick = true;
+    setTimeout(() => (suppressClick = false), 0);
+    if (d.folder !== undefined) {
+      const moving = d.ids.filter((id) => app.sound(id)?.folder_id !== d.folder);
+      if (moving.length) app.moveToFolder(moving, d.folder);
+      return;
+    }
+    if (d.target) {
+      const rest = list.map((s) => s.id).filter((x) => x !== d.id);
+      const i = rest.indexOf(d.target.id);
+      const before = d.target.side === 'before' ? d.target.id : (rest[i + 1] ?? null);
+      void app.reorder(d.id, before);
+    }
+  }
+
+  function cancelDrag(e: KeyboardEvent) {
+    if (drag?.active && e.key === 'Escape') {
+      e.stopPropagation();
+      drag = null;
+      suppressClick = true;
+    }
+  }
+
+  const draggedSound = $derived(drag?.active ? app.sound(drag.id) : undefined);
+</script>
+
+<svelte:window onkeydown={cancelDrag} />
+
+<div
+  bind:this={container}
+  class="collection {view}"
+  style:--tile={app.prefs.size === 's' ? '100px' : app.prefs.size === 'l' ? '168px' : '128px'}
+  role="listbox"
+  aria-label="Suoni"
+  aria-multiselectable="true"
+  tabindex={app.focusId && list.some((s) => s.id === app.focusId) ? -1 : 0}
+  {onclick}
+  {oncontextmenu}
+  {onkeydown}
+  {onpointerdown}
+  {onpointermove}
+  {onpointerup}
+  onpointercancel={() => (drag = null)}
+  onfocus={(e) => {
+    if (e.target === container && list.length && !app.focusId) app.focusId = list[0].id;
+  }}
+>
+  {#each list as s (s.id)}
+    <SoundItem
+      sound={s}
+      {view}
+      selected={app.selection.has(s.id)}
+      focused={app.focusId === s.id}
+      fresh={app.fresh.has(s.id)}
+      hotkey={app.hotkeyBySound.get(s.id)}
+      playing={app.playingBySound.get(s.id)}
+      now={app.now}
+      renaming={app.renamingId === s.id}
+      drop={drag?.target?.id === s.id ? drag.target.side : null}
+      dragging={!!drag?.active && drag.ids.includes(s.id)}
+      defaultMode={app.settings?.playback.default_mode ?? 'overlap'}
+      onrename={(name) => {
+        app.renamingId = null;
+        app.rename(s.id, name);
+        container.querySelector<HTMLElement>(`[data-sound-id="${CSS.escape(s.id)}"]`)?.focus();
+      }}
+      oncancelrename={() => {
+        app.renamingId = null;
+        container.querySelector<HTMLElement>(`[data-sound-id="${CSS.escape(s.id)}"]`)?.focus();
+      }}
+    />
+  {/each}
+</div>
+
+{#if draggedSound && drag}
+  <div class="ghost" style:left="{drag.x + 12}px" style:top="{drag.y + 12}px" aria-hidden="true">
+    {drag.ids.length > 1 ? `${drag.ids.length} suoni` : draggedSound.name}
+    {#if drag.folder !== undefined}
+      → {drag.folder === null ? 'Tutti' : app.folders.find((f) => f.id === drag!.folder)?.name}
+    {/if}
+  </div>
+{/if}
+
+<style>
+  .collection {
+    flex: 1;
+    overflow: auto;
+    padding: 12px;
+    outline: none;
+    align-content: start;
+  }
+  .collection.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, var(--tile));
+    gap: 10px;
+    justify-content: start;
+  }
+  .collection.list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ghost {
+    position: fixed;
+    z-index: 90;
+    pointer-events: none;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 13px;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+    white-space: nowrap;
+  }
+</style>

@@ -14,6 +14,18 @@ export const STATUS_TEXT: Partial<Record<ErrorCode, { title: string; body: strin
     title: 'CABLE Input è il dispositivo predefinito',
     body: 'Così non senti più l\'audio del PC. Imposta le cuffie come dispositivo di riproduzione predefinito.',
   },
+  discord_filters_sounds: {
+    title: 'Discord sta togliendo i suoni',
+    body: 'La soppressione del rumore (Krisp) li tratta come rumore. In Discord → Voce e video → Soppressione del rumore: Nessuna.',
+  },
+  discord_wrong_input: {
+    title: 'Discord non ascolta il microfono virtuale',
+    body: 'In Discord → Voce e video → Dispositivo di input: CABLE Output (VB-Audio Virtual Cable).',
+  },
+  discord_push_to_talk: {
+    title: 'Discord è in push-to-talk',
+    body: 'I suoni passano solo mentre tieni premuto il tasto. Attiva il relay push-to-talk nelle impostazioni di MicFX.',
+  },
   rate_mismatch: {
     title: 'Frequenza diversa da 48 kHz',
     body: 'Funziona lo stesso, ma per la qualità migliore imposta 48000 Hz su cuffie e VB-Cable.',

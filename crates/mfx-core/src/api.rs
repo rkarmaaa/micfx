@@ -36,6 +36,12 @@ pub enum ErrorCode {
     LibraryRecovered,
     PttSendFailed,
     OutputsDisabled,
+    /// Discord non usa CABLE Output come dispositivo di input: non sente i suoni.
+    DiscordWrongInput,
+    /// Krisp o la soppressione del rumore di Discord tolgono i suoni (sono "rumore", non voce).
+    DiscordFiltersSounds,
+    /// Discord è in push-to-talk e il relay PTT di MicFX è spento: i suoni passano solo col tasto premuto.
+    DiscordPushToTalk,
     InvalidArgument,
     Internal,
 }
@@ -167,6 +173,32 @@ pub struct Snapshot {
     pub app: AppInfo,
     /// Avvisi una tantum dall'ultimo avvio (es. `config_recovered`).
     pub notices: Vec<Notice>,
+    /// Impostazioni voce di Discord, se lette. Arrivano anche dopo, con `discord:changed`.
+    pub discord: Option<DiscordInfo>,
+}
+
+/// Impostazioni voce di Discord che decidono se i suoni arrivano agli altri (lette dal client
+/// desktop, in sola lettura). La UI le mostra nella guida e nell'avviso.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct DiscordInfo {
+    /// "Discord", "Discord PTB" o "Discord Canary".
+    pub client: String,
+    /// Dispositivo di input scelto in Discord, se è tra quelli attivi.
+    pub input_name: Option<String>,
+    /// `true` = CABLE Output; `None` = dispositivo non trovato tra quelli attivi.
+    pub input_is_cable: Option<bool>,
+    /// In Discord l'input è "Predefinito" (segue quello di Windows).
+    pub input_is_default: bool,
+    pub push_to_talk: bool,
+    /// Soppressione del rumore Krisp.
+    pub krisp: bool,
+    /// Soppressione del rumore "Standard".
+    pub noise_suppression: bool,
+    /// Attività vocale avanzata: il microfono si apre solo quando Discord sente una voce.
+    pub advanced_vad: bool,
+    pub echo_cancellation: bool,
+    pub automatic_gain_control: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -302,6 +334,7 @@ pub enum CoreEvent {
         paused: bool,
     },
     SettingsChanged(Box<Settings>),
+    DiscordChanged(Option<DiscordInfo>),
     Notice(Notice),
     // --- verso il guscio ---
     /// Il keepalive della UI è scaduto: distruggere la finestra (SPEC §10.2).
@@ -322,6 +355,7 @@ impl CoreEvent {
             CoreEvent::StatusChanged(_) => "status:changed",
             CoreEvent::HotkeysChanged { .. } => "hotkeys:changed",
             CoreEvent::SettingsChanged(_) => "settings:changed",
+            CoreEvent::DiscordChanged(_) => "discord:changed",
             CoreEvent::Notice(_) => "notice",
             CoreEvent::UiExpired | CoreEvent::OpenWindow => return None,
         })
@@ -338,6 +372,7 @@ impl CoreEvent {
             CoreEvent::StatusChanged(s) => json!({ "status": s }),
             CoreEvent::HotkeysChanged { hotkeys, paused } => json!({ "hotkeys": hotkeys, "paused": paused }),
             CoreEvent::SettingsChanged(s) => json!(s),
+            CoreEvent::DiscordChanged(d) => json!({ "discord": d }),
             CoreEvent::Notice(n) => json!(n),
             CoreEvent::UiExpired | CoreEvent::OpenWindow => serde_json::Value::Null,
         }

@@ -8,6 +8,7 @@ import type { ApiError } from './types/ApiError';
 import type { BusKind } from './types/BusKind';
 import type { Device } from './types/Device';
 import type { Diagnostics } from './types/Diagnostics';
+import type { DiscordInfo } from './types/DiscordInfo';
 import type { ErrorCode } from './types/ErrorCode';
 import type { Folder } from './types/Folder';
 import type { Hotkey } from './types/Hotkey';
@@ -28,6 +29,7 @@ export type * from './types/AppInfo';
 export type * from './types/BusKind';
 export type * from './types/Device';
 export type * from './types/Diagnostics';
+export type * from './types/DiscordInfo';
 export type * from './types/ErrorCode';
 export type * from './types/Folder';
 export type * from './types/Hotkey';
@@ -75,6 +77,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 
 export const api = {
   getSnapshot: () => call<Snapshot>('get_snapshot'),
+  recheckSetup: () => call<void>('recheck_setup'),
   playSound: (sound_id: string) => call<number | null>('play_sound', { sound_id }),
   previewSound: (sound_id: string) => call<number | null>('preview_sound', { sound_id }),
   stopSound: (sound_id: string) => call<void>('stop_sound', { sound_id }),
@@ -97,7 +100,7 @@ export const api = {
   /** Pannello audio di Windows: 0 Riproduzione, 1 Registrazione, 3 Comunicazioni. */
   openSoundSettings: (tab: 0 | 1 | 3) => call<void>('open_sound_settings', { tab }),
   openDataFolder: () => call<void>('open_data_folder'),
-  openLink: (which: 'vb-cable' | 'discord-voice') => call<void>('open_link', { which }),
+  openLink: (which: 'vb-cable' | 'discord-voice' | 'discord-app') => call<void>('open_link', { which }),
 };
 
 export type EventMap = {
@@ -109,6 +112,7 @@ export type EventMap = {
   'status:changed': { status: ErrorCode[] };
   'hotkeys:changed': { hotkeys: Hotkey[]; paused: boolean };
   'settings:changed': Settings;
+  'discord:changed': { discord: DiscordInfo | null };
   notice: Notice;
 };
 

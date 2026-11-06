@@ -1,13 +1,18 @@
-// Slider 0–100 % ↔ dB del core. Curva cubica (−18 dB a metà corsa): segue l'orecchio, non la matematica.
+// Slider 0–200 % ↔ dB del core. Fino a 100 % (volume originale) curva cubica (−18 dB a metà corsa);
+// oltre, amplificazione lineare in dB fino a +12 dB a 200 %. Il limiter del bus evita la distorsione.
 export const MIN_DB = -60;
+export const MAX_PERCENT = 200;
+export const MAX_BOOST_DB = 12;
 
 export function percentToDb(p: number): number {
   if (p <= 0) return MIN_DB;
-  return Math.max(MIN_DB, 60 * Math.log10(Math.min(p, 100) / 100));
+  if (p > 100) return (Math.min(p, MAX_PERCENT) - 100) * (MAX_BOOST_DB / 100);
+  return Math.max(MIN_DB, 60 * Math.log10(p / 100));
 }
 
 export function dbToPercent(db: number): number {
   if (db <= MIN_DB + 0.01) return 0;
+  if (db > 0) return Math.min(MAX_PERCENT, Math.round(100 + db * (100 / MAX_BOOST_DB)));
   return Math.max(0, Math.min(100, Math.round(100 * 10 ** (db / 60))));
 }
 

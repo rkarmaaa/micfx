@@ -5,12 +5,13 @@ use std::time::Duration;
 
 use mfx_audio::{DeviceId, OfflineBus, OutputBus, Wake};
 use mfx_platform::Accelerator;
+use mfx_platform::discord::DiscordVoice;
 
 use crate::CoreHandle;
 use crate::api::*;
 use crate::config::{HotkeyBinding, Settings};
 use crate::paths::Paths;
-use crate::platform::{BusParams, MicEndpoint, Platform, RegisterError};
+use crate::platform::{BusParams, DiscordReader, MicEndpoint, Platform, RegisterError};
 
 #[derive(Default)]
 struct World {
@@ -20,6 +21,7 @@ struct World {
     registered: Vec<(i32, String)>,
     conflicts: Vec<String>,
     keys: Vec<(u16, bool)>,
+    discord: Option<DiscordVoice>,
 }
 
 type Shared = Arc<Mutex<World>>;
@@ -60,6 +62,10 @@ impl Platform for FakePlatform {
         let b = OfflineBus::new(params.gain);
         self.0.lock().unwrap().buses.push((kind, b.clone()));
         Ok(Box::new(b))
+    }
+    fn discord_reader(&self) -> DiscordReader {
+        let w = self.0.clone();
+        Arc::new(move || w.lock().unwrap().discord.clone())
     }
 }
 
@@ -104,6 +110,19 @@ fn devices(with_cable: bool) -> Vec<Device> {
     v
 }
 
+const CABLE_OUT: &str = "{0.0.1.00000000}.{cable-out}";
+
+fn cable_output() -> MicEndpoint {
+    MicEndpoint {
+        id: CABLE_OUT.into(),
+        name: "CABLE Output (VB-Audio Virtual Cable)".into(),
+        is_default: false,
+        is_cable: true,
+        listen_enabled: false,
+        listen_target: None,
+    }
+}
+
 fn routed_mic() -> MicEndpoint {
     MicEndpoint {
         id: "mic".into(),
@@ -133,8 +152,11 @@ impl Harness {
     }
 
     fn at(root: std::path::PathBuf, devs: Vec<Device>) -> Self {
-        let world: Shared =
-            Arc::new(Mutex::new(World { devices: devs, mics: vec![routed_mic()], ..Default::default() }));
+        let world: Shared = Arc::new(Mutex::new(World {
+            devices: devs,
+            mics: vec![routed_mic(), cable_output()],
+            ..Default::default()
+        }));
         let sink = Arc::new(Sink::default());
         let w = world.clone();
         let core =
@@ -162,6 +184,24 @@ impl Harness {
     fn settle(&self) {
         let _ = self.core.get_diagnostics();
         let _ = self.core.get_diagnostics();
+    }
+
+    /// Cambia Discord "sul disco" e chiede al core di ricontrollare, come fa la UI tornando in primo piano.
+    fn set_discord(&self, d: Option<DiscordVoice>) {
+        self.world.lock().unwrap().discord = d;
+        self.core.recheck_setup().unwrap();
+    }
+
+    /// La lettura di Discord è asincrona: aspetta che lo stato soddisfi `f`.
+    fn wait_status(&self, f: impl Fn(&[StatusCode]) -> bool) -> Vec<StatusCode> {
+        for _ in 0..300 {
+            let s = self.core.get_snapshot().unwrap().status;
+            if f(&s) {
+                return s;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("stato atteso non raggiunto: {:?}", self.core.get_snapshot().unwrap().status);
     }
 
     fn bus(&self, kind: BusKind) -> Option<OfflineBus> {
@@ -595,4 +635,78 @@ fn hotkeys_of_missing_sounds_are_dropped_at_load() {
     let snap = h.core.get_snapshot().unwrap();
     assert_eq!(snap.hotkeys.len(), 1);
     assert_eq!(snap.hotkeys[0].action, HotkeyAction::StopAll);
+}
+
+fn discord(krisp: bool, input: &str) -> DiscordVoice {
+    DiscordVoice {
+        client: "Discord",
+        input_device_id: input.into(),
+        push_to_talk: false,
+        krisp,
+        noise_suppression: false,
+        advanced_vad: true,
+        echo_cancellation: true,
+        automatic_gain_control: true,
+        auto_sensitivity: true,
+    }
+}
+
+#[test]
+fn discord_filters_and_wrong_input_are_reported_then_clear() {
+    let h = Harness::new();
+    // Il caso reale: input giusto, ma Krisp toglie i suoni.
+    h.set_discord(Some(discord(true, CABLE_OUT)));
+    let s = h.wait_status(|s| s.contains(&ErrorCode::DiscordFiltersSounds));
+    assert!(!s.contains(&ErrorCode::DiscordWrongInput));
+    let d = h.core.get_snapshot().unwrap().discord.unwrap();
+    assert_eq!(d.input_is_cable, Some(true));
+    assert_eq!(d.input_name.as_deref(), Some("CABLE Output (VB-Audio Virtual Cable)"));
+    assert!(d.krisp && d.advanced_vad && d.automatic_gain_control);
+
+    // Krisp spento ma input "Predefinito", che in Windows è il microfono fisico.
+    h.set_discord(Some(discord(false, "default")));
+    let s = h.wait_status(|s| s.contains(&ErrorCode::DiscordWrongInput));
+    assert!(!s.contains(&ErrorCode::DiscordFiltersSounds));
+    let d = h.core.get_snapshot().unwrap().discord.unwrap();
+    assert!(d.input_is_default);
+    assert_eq!(d.input_name.as_deref(), Some("Microfono"));
+
+    // Tutto a posto: nessun avviso Discord.
+    h.set_discord(Some(discord(false, &CABLE_OUT.to_uppercase())));
+    let s = h.wait_status(|s| !s.contains(&ErrorCode::DiscordWrongInput));
+    assert!(s.iter().all(|c| !matches!(
+        c,
+        ErrorCode::DiscordWrongInput | ErrorCode::DiscordFiltersSounds | ErrorCode::DiscordPushToTalk
+    )));
+    assert!(h.sink.count("discord:changed") >= 3);
+}
+
+#[test]
+fn discord_push_to_talk_asks_for_the_relay() {
+    let h = Harness::new();
+    let mut d = discord(false, CABLE_OUT);
+    d.push_to_talk = true;
+    h.set_discord(Some(d));
+    h.wait_status(|s| s.contains(&ErrorCode::DiscordPushToTalk));
+    // In push-to-talk l'attività vocale avanzata non conta.
+    assert!(!h.core.get_snapshot().unwrap().discord.unwrap().advanced_vad);
+    h.core.update_settings(serde_json::json!({ "ptt": { "enabled": true, "key": "V" } })).unwrap();
+    assert!(!h.core.get_snapshot().unwrap().status.contains(&ErrorCode::DiscordPushToTalk));
+}
+
+#[test]
+fn unknown_discord_input_or_no_discord_is_not_an_error() {
+    let h = Harness::new();
+    h.set_discord(Some(discord(false, "{0.0.1.00000000}.{scollegato}")));
+    for _ in 0..50 {
+        if h.core.get_snapshot().unwrap().discord.is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let snap = h.core.get_snapshot().unwrap();
+    assert_eq!(snap.discord.unwrap().input_is_cable, None);
+    assert!(!snap.status.contains(&ErrorCode::DiscordWrongInput));
+    h.set_discord(None);
+    h.wait_status(|_| h.core.get_snapshot().unwrap().discord.is_none());
 }

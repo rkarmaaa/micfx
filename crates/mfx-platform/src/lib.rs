@@ -3,6 +3,7 @@
 //! Tutto è a eventi: `RegisterHotKey` + `GetMessageW`, `IMMNotificationClient`. Nessun polling.
 
 pub mod accel;
+pub mod discord;
 
 #[cfg(windows)]
 pub mod com;

@@ -5,7 +5,16 @@
   import { app } from '../stores/app.svelte';
   import { STATUS_TEXT } from '../util/messages';
 
-  const ORDER: ErrorCode[] = ['cable_missing', 'cable_busy', 'mic_not_routed', 'default_is_cable', 'rate_mismatch'];
+  const ORDER: ErrorCode[] = [
+    'cable_missing',
+    'cable_busy',
+    'discord_wrong_input',
+    'discord_filters_sounds',
+    'mic_not_routed',
+    'default_is_cable',
+    'discord_push_to_talk',
+    'rate_mismatch',
+  ];
   let dismissed = $state<ErrorCode[]>([]);
 
   const code = $derived(ORDER.find((c) => app.status.includes(c) && !dismissed.includes(c)));
@@ -26,6 +35,10 @@
       {:else if code === 'mic_not_routed'}
         <button type="button" class="primary" onclick={() => api.openSoundSettings(1)}>Apri impostazioni microfono</button>
         <button type="button" onclick={() => (app.guideOpen = true)}>Come fare</button>
+      {:else if code === 'discord_wrong_input' || code === 'discord_filters_sounds'}
+        <button type="button" class="primary" onclick={() => api.openLink('discord-app')}>Apri Discord</button>
+      {:else if code === 'discord_push_to_talk'}
+        <button type="button" class="primary" onclick={() => (app.settingsOpen = true)}>Impostazioni</button>
       {:else if code === 'default_is_cable'}
         <button type="button" class="primary" onclick={() => api.openSoundSettings(0)}>Apri impostazioni audio</button>
       {:else}

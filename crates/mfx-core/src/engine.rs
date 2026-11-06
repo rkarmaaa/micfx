@@ -15,6 +15,7 @@ use mfx_library::persist::{self, ReadOutcome};
 use mfx_library::{Folder, ImportError, ImportOptions, LibraryIndex, PlayMode, SbPcmFile, Sound, SoundSource};
 use mfx_platform::Accelerator;
 use mfx_platform::devices::DeviceEvent;
+use mfx_platform::discord::DiscordVoice;
 
 use crate::api::*;
 use crate::config::{self, HotkeyBinding, OutputSettings, Settings, WindowRect};
@@ -164,6 +165,11 @@ pub struct Engine {
     next_job_id: u64,
     notices: Vec<Notice>,
     index_trusted: bool,
+    /// Ultime impostazioni di Discord lette; `None` = Discord non trovato o illeggibile.
+    discord: Option<DiscordVoice>,
+    /// Una lettura è in corso; `discord_again` = rifarla appena finisce.
+    discord_checking: bool,
+    discord_again: bool,
 }
 
 impl Engine {
@@ -248,6 +254,9 @@ impl Engine {
             next_job_id: 1,
             notices,
             index_trusted,
+            discord: None,
+            discord_checking: false,
+            discord_again: false,
         };
         e.recover_orphans();
         if config_dirty {
@@ -389,6 +398,10 @@ impl Engine {
         self.apply_effective_devices();
         if changed && emit {
             self.emit(CoreEvent::DevicesChanged { devices: self.devices.clone(), mics: self.mics.clone() });
+            if self.discord.is_some() {
+                // Il nome del dispositivo di input di Discord si risolve sugli endpoint attivi.
+                self.emit(CoreEvent::DiscordChanged(self.discord_view()));
+            }
         }
         self.update_status();
     }
@@ -489,6 +502,17 @@ impl Engine {
                 if self.settings.mic.mode == config::MicMode::System && !self.mics.iter().any(|m| m.routed_to_cable) {
                     s.push(ErrorCode::MicNotRouted);
                 }
+                if let Some(d) = self.discord_view() {
+                    if d.input_is_cable == Some(false) {
+                        s.push(ErrorCode::DiscordWrongInput);
+                    }
+                    if d.krisp || d.noise_suppression {
+                        s.push(ErrorCode::DiscordFiltersSounds);
+                    }
+                    if d.push_to_talk && !self.settings.ptt.enabled {
+                        s.push(ErrorCode::DiscordPushToTalk);
+                    }
+                }
             }
         }
         let monitor_rate = match self.effective_monitor() {
@@ -512,6 +536,75 @@ impl Engine {
             self.status = s;
             self.emit(CoreEvent::StatusChanged(self.status.clone()));
         }
+    }
+
+    // ------------------------------------------------------------------ Discord
+
+    /// Rilegge le impostazioni di Discord su un thread a parte (qualche MB su disco): l'engine
+    /// resta libero per le hotkey. Più richieste ravvicinate diventano al massimo una lettura in più.
+    pub(crate) fn check_discord(&mut self) {
+        if self.discord_checking {
+            self.discord_again = true;
+            return;
+        }
+        let read = self.platform.discord_reader();
+        let (tx, waker) = (self.tx.clone(), self.waker.clone());
+        let spawned = std::thread::Builder::new().name("mfx-discord".into()).spawn(move || {
+            let v = read();
+            let _ = tx.send(Command::Call(Box::new(move |e: &mut Engine| e.on_discord(v))));
+            waker.set();
+        });
+        match spawned {
+            Ok(_) => self.discord_checking = true,
+            Err(e) => tracing::warn!("lettura impostazioni Discord non avviata: {e}"),
+        }
+    }
+
+    fn on_discord(&mut self, v: Option<DiscordVoice>) {
+        self.discord_checking = false;
+        if self.discord != v {
+            match &v {
+                Some(d) => tracing::info!(
+                    "Discord: input {}, krisp {}, soppressione {}, vad avanzato {}, eco {}, agc {}, ptt {}",
+                    d.input_device_id,
+                    d.krisp,
+                    d.noise_suppression,
+                    d.advanced_vad,
+                    d.echo_cancellation,
+                    d.automatic_gain_control,
+                    d.push_to_talk
+                ),
+                None => tracing::info!("Discord: impostazioni voce non trovate"),
+            }
+            self.discord = v;
+            self.emit(CoreEvent::DiscordChanged(self.discord_view()));
+            self.update_status();
+        }
+        if std::mem::take(&mut self.discord_again) {
+            self.check_discord();
+        }
+    }
+
+    fn discord_view(&self) -> Option<DiscordInfo> {
+        let d = self.discord.as_ref()?;
+        let is_default = d.input_device_id.eq_ignore_ascii_case("default");
+        let input = if is_default {
+            self.raw_mics.iter().find(|m| m.is_default)
+        } else {
+            self.raw_mics.iter().find(|m| m.id.eq_ignore_ascii_case(&d.input_device_id))
+        };
+        Some(DiscordInfo {
+            client: d.client.to_string(),
+            input_name: input.map(|m| m.name.clone()),
+            input_is_cable: input.map(|m| m.is_cable),
+            input_is_default: is_default,
+            push_to_talk: d.push_to_talk,
+            krisp: d.krisp,
+            noise_suppression: d.noise_suppression,
+            advanced_vad: d.advanced_vad && !d.push_to_talk,
+            echo_cancellation: d.echo_cancellation,
+            automatic_gain_control: d.automatic_gain_control,
+        })
     }
 
     // ------------------------------------------------------------------ bus
@@ -1092,6 +1185,8 @@ impl Engine {
     pub(crate) fn ui_opened(&mut self) {
         self.ui_open = true;
         self.timers.ui_keepalive = None;
+        // L'utente potrebbe aver cambiato Discord mentre la finestra era chiusa.
+        self.check_discord();
     }
 
     pub(crate) fn ui_hidden(&mut self) {
@@ -1121,6 +1216,7 @@ impl Engine {
                 library_dir: self.paths.library_dir().display().to_string(),
             },
             notices: std::mem::take(&mut self.notices),
+            discord: self.discord_view(),
         }
     }
 

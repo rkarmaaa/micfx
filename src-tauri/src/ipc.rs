@@ -23,6 +23,12 @@ pub async fn get_snapshot(core: State<'_, CoreHandle>) -> ApiResult<Snapshot> {
     blocking(&core, |c| c.get_snapshot()).await
 }
 
+/// La finestra è tornata in primo piano: il core ricontrolla Discord (risponde con eventi).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn recheck_setup(core: State<'_, CoreHandle>) -> ApiResult<()> {
+    blocking(&core, |c| c.recheck_setup()).await
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn play_sound(core: State<'_, CoreHandle>, sound_id: String) -> ApiResult<Option<u64>> {
     blocking(&core, move |c| c.play_sound(sound_id)).await
@@ -168,6 +174,8 @@ pub fn open_link(which: String) -> ApiResult<()> {
     let url = match which.as_str() {
         "vb-cable" => "https://vb-audio.com/Cable/",
         "discord-voice" => "https://support.discord.com/hc/it/articles/360045138471",
+        // Protocollo registrato dal client: apre Discord (sulle impostazioni voce, se le riconosce).
+        "discord-app" => "discord://-/settings/voice",
         _ => return Err(ApiError::new(ErrorCode::InvalidArgument, "Collegamento sconosciuto.")),
     };
     std::process::Command::new("rundll32.exe")

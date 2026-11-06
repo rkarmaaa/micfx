@@ -9,6 +9,7 @@ use mfx_audio::event::Event;
 use mfx_audio::{DeviceId, OutputBus, Wake};
 use mfx_platform::Accelerator;
 use mfx_platform::devices::{DeviceEvent, Devices, Watcher};
+use mfx_platform::discord::DiscordVoice;
 use mfx_platform::hotkeys::{HotkeyError, HotkeyService};
 
 use crate::api::{BusKind, Device};
@@ -29,6 +30,9 @@ pub enum RegisterError {
     Conflict,
     Failed(String),
 }
+
+/// Lettura delle impostazioni di Discord: gira su un thread a parte (I/O su disco).
+pub type DiscordReader = Arc<dyn Fn() -> Option<DiscordVoice> + Send + Sync>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct BusParams {
@@ -52,6 +56,7 @@ pub trait Platform {
         params: BusParams,
         waker: Arc<dyn Wake>,
     ) -> Result<Box<dyn OutputBus>, String>;
+    fn discord_reader(&self) -> DiscordReader;
 }
 
 pub struct WindowsPlatform {
@@ -167,5 +172,9 @@ impl Platform for WindowsPlatform {
         WasapiBus::spawn(name, device, params.gain, params.ceiling_db, timing, waker)
             .map(|b| Box::new(b) as Box<dyn OutputBus>)
             .map_err(|e| e.to_string())
+    }
+
+    fn discord_reader(&self) -> DiscordReader {
+        Arc::new(mfx_platform::discord::read_voice_settings)
     }
 }

@@ -180,6 +180,12 @@ impl CoreHandle {
         let _ = self.call(|e| e.ui_opened());
     }
 
+    /// La finestra è tornata in primo piano: rilegge le impostazioni di Discord (risposta con
+    /// `discord:changed` e `status:changed`, solo se qualcosa è cambiato).
+    pub fn recheck_setup(&self) -> ApiResult<()> {
+        self.call(|e| e.check_discord())
+    }
+
     pub fn ui_hidden(&self) {
         let _ = self.call(|e| e.ui_hidden());
     }

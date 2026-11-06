@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { BusKind } from '../api';
   import { app } from '../stores/app.svelte';
-  import { formatDb, percentToDb } from '../util/volume';
+  import { MAX_PERCENT, formatDb, percentToDb } from '../util/volume';
   import Switch from './Switch.svelte';
 
   const DEFAULTS: Record<BusKind, number> = { monitor: 79, cable: 100 };
@@ -39,7 +39,7 @@
   function wheel(bus: BusKind, e: WheelEvent) {
     e.preventDefault();
     const step = e.shiftKey ? 1 : 5;
-    app.setVolume(bus, Math.max(0, Math.min(100, percent(bus) + (e.deltaY < 0 ? step : -step))));
+    app.setVolume(bus, Math.max(0, Math.min(MAX_PERCENT, percent(bus) + (e.deltaY < 0 ? step : -step))));
   }
 </script>
 
@@ -70,14 +70,14 @@
       <input
         type="range"
         min="0"
-        max="100"
+        max={MAX_PERCENT}
         step="1"
         value={p}
         disabled={unavailable}
         aria-label={r.label}
         aria-valuetext="{p}% ({formatDb(percentToDb(p))})"
-        title="{formatDb(percentToDb(p))} · rotellina per regolare, doppio clic per {DEFAULTS[r.bus]}%"
-        style:--fill="{p}%"
+        title="{formatDb(percentToDb(p))} · oltre 100% amplifica · rotellina per regolare, doppio clic per {DEFAULTS[r.bus]}%"
+        style:--fill="{p / 2}%"
         oninput={(e) => app.setVolume(r.bus, +e.currentTarget.value)}
         onwheel={(e) => wheel(r.bus, e)}
         ondblclick={() => app.setVolume(r.bus, DEFAULTS[r.bus])}

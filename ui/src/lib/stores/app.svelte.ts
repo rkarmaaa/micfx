@@ -9,6 +9,7 @@ import {
   type AppInfo,
   type BusKind,
   type Device,
+  type DiscordInfo,
   type ErrorCode,
   type Folder,
   type Hotkey,
@@ -85,6 +86,7 @@ class AppStore {
   settings = $state<Settings | null>(null);
   devices = $state<Device[]>([]);
   mics = $state<Mic[]>([]);
+  discord = $state<DiscordInfo | null>(null);
   folders = $state<Folder[]>([]);
   sounds = $state<Sound[]>([]);
   hotkeys = $state<Hotkey[]>([]);
@@ -116,7 +118,9 @@ class AppStore {
 
   private rafOn = false;
   private prefsTimer: ReturnType<typeof setTimeout> | null = null;
-  private volumeTimers: Partial<Record<BusKind, ReturnType<typeof setTimeout>>> = {};
+  /** Volume voluto dall'utente e non ancora confermato dal core. */
+  private volumeWant: Partial<Record<BusKind, number>> = {};
+  private volumeBusy: Partial<Record<BusKind, boolean>> = {};
   private importToasts = new Map<number, number>();
 
   // ------------------------------------------------------------------ derivati
@@ -213,6 +217,7 @@ class AppStore {
     this.settings = s.settings;
     this.devices = s.devices;
     this.mics = s.mics;
+    this.discord = s.discord;
     this.folders = s.library.folders;
     this.sounds = s.library.sounds;
     this.hotkeys = s.hotkeys;
@@ -262,8 +267,17 @@ class AppStore {
       this.hotkeysPaused = h.paused;
     });
     on('settings:changed', (s) => {
+      // L'eco del core può essere più vecchio di quello che l'utente sta trascinando: i volumi
+      // ancora da confermare restano quelli locali, altrimenti lo slider salta indietro.
+      for (const bus of ['monitor', 'cable'] as BusKind[]) {
+        const want = this.volumeWant[bus];
+        if (want !== undefined) s.outputs[bus].volume_db = want;
+      }
       this.settings = s;
     });
+    on('discord:changed', (d) => (this.discord = d.discord));
+    // Tornando su MicFX dopo aver cambiato Discord, il core ricontrolla da solo.
+    window.addEventListener('focus', () => api.recheckSetup().catch(() => {}));
     on('notice', (n) => this.showNotice(n));
   }
 
@@ -337,12 +351,26 @@ class AppStore {
     if (!this.settings) return;
     const db = percentToDb(percent);
     this.settings.outputs[bus].volume_db = db;
-    if (this.volumeTimers[bus]) return;
-    this.volumeTimers[bus] = setTimeout(() => {
-      this.volumeTimers[bus] = undefined;
-      const latest = this.settings!.outputs[bus].volume_db;
-      api.setOutput(bus, { volume_db: latest }).catch((e) => fail(e));
-    }, 40);
+    this.volumeWant[bus] = db;
+    void this.flushVolume(bus);
+  }
+
+  /** Una sola richiesta per bus alla volta, sempre con l'ultimo valore: l'ordine non si inverte
+   *  e il valore finale arriva sempre al core. */
+  private async flushVolume(bus: BusKind) {
+    if (this.volumeBusy[bus]) return;
+    this.volumeBusy[bus] = true;
+    try {
+      let sent: number | undefined;
+      while (this.volumeWant[bus] !== undefined && this.volumeWant[bus] !== sent) {
+        sent = this.volumeWant[bus]!;
+        await api.setOutput(bus, { volume_db: sent }).catch((e) => fail(e));
+        await new Promise((r) => setTimeout(r, 30));
+      }
+      if (this.volumeWant[bus] === sent) this.volumeWant[bus] = undefined;
+    } finally {
+      this.volumeBusy[bus] = false;
+    }
   }
 
   async setOutputEnabled(bus: BusKind, enabled: boolean) {

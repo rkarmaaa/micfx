@@ -10,7 +10,7 @@ pub const CONFIG_SCHEMA_VERSION: u32 = 1;
 
 /// Sotto questa soglia il volume è silenzio.
 pub const MIN_VOLUME_DB: f32 = -60.0;
-pub const MAX_VOLUME_DB: f32 = 6.0;
+pub const MAX_VOLUME_DB: f32 = 12.0;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(default)]

@@ -77,8 +77,10 @@
         <p>Impostazioni → Voce e video:</p>
         <ul>
           <li>Dispositivo di input: <em>CABLE Output (VB-Audio Virtual Cable)</em></li>
-          <li>Soppressione del rumore: <em>Nessuna</em> (Krisp taglia effetti e musica)</li>
-          <li>Controllo automatico del guadagno: <em>spento</em></li>
+          <li>Soppressione del rumore: <em>Nessuna</em> (Krisp taglia effetti e musica){app.discord ? (app.discord.krisp || app.discord.noise_suppression ? ' ⚠️ ora attiva' : ' ✅') : ''}</li>
+          <li>Controllo automatico del guadagno: <em>spento</em> (abbassa i suoni){app.discord ? (app.discord.automatic_gain_control ? ' ⚠️ ora acceso' : ' ✅') : ''}</li>
+          <li>Cancellazione dell'eco: <em>spenta</em>{app.discord ? (app.discord.echo_cancellation ? ' ⚠️ ora accesa' : ' ✅') : ''}</li>
+          <li>Attività vocale avanzata: <em>spenta</em> (apre il microfono solo sulla voce){app.discord?.advanced_vad ? ' ⚠️ ora accesa' : ''}</li>
           <li>Modalità di input: <em>Attività vocale</em>, sensibilità manuale intorno a −45 dB<br />
             oppure push-to-talk con il relay nelle impostazioni di MicFX</li>
         </ul>

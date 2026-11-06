@@ -48,9 +48,11 @@ Riproduzione: < 0,3 % CPU, 0 underrun, hotkey → primo campione p95 ≤ 40 ms. 
 
 ## Dati dell'utente
 
-`%APPDATA%\MicFX\config.json` e `%LOCALAPPDATA%\MicFX\library\` (indice + `pcm\*.sbpcm`). Le cartelle
-**non** hanno il nome dell'identificativo del bundle, così l'uninstaller non le cancella: libreria e
-impostazioni sopravvivono ad aggiornamenti e reinstallazioni. Non cambiare questi percorsi senza una migrazione.
+`%APPDATA%\MicFX\config.json` e `%LOCALAPPDATA%\MicFX Data\library\` (indice + `pcm\*.sbpcm`, log in
+`logs\`). Le cartelle **non** hanno il nome dell'identificativo del bundle e sono separate da quella del
+programma (`%LOCALAPPDATA%\MicFX`, scelta dall'installer per utente): l'uninstaller non le tocca, libreria e
+impostazioni sopravvivono ad aggiornamenti e reinstallazioni. Non cambiare questi percorsi senza una migrazione
+(vedi `Paths::migrate_library_from`).
 
 ## Convenzioni
 

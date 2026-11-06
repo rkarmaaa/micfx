@@ -6,9 +6,13 @@ Scelte prese durante lo sviluppo, rispetto a [SPEC.md](SPEC.md). Le più recenti
 
 - Nome definitivo **MicFX** (decisione aperta §17). Crate con prefisso `mfx-`, eseguibile `micfx.exe`,
   identificativo `com.micfx.desktop`.
-- Dati in `%APPDATA%\MicFX` e `%LOCALAPPDATA%\MicFX`, **non** nella cartella col nome del bundle: l'uninstaller
-  NSIS di Tauri, con "elimina dati" spuntato, cancella solo quella. Requisito: i dati restano identici dopo
-  aggiornamenti e reinstallazioni.
+- Dati in `%APPDATA%\MicFX` (config) e `%LOCALAPPDATA%\MicFX Data` (libreria, log), **non** nella cartella col
+  nome del bundle: l'uninstaller NSIS di Tauri, con "elimina dati" spuntato, cancella solo quella. Requisito: i dati
+  restano identici dopo aggiornamenti e reinstallazioni.
+- La libreria non sta in `%LOCALAPPDATA%\MicFX` perché l'installer per utente mette lì il programma. Oggi
+  l'uninstaller cancella solo i propri file e rimuove la cartella solo se vuota, ma tenere programma e dati insieme
+  è fragile (strumenti di pulizia, template futuri). Le prime build usavano quella cartella: all'avvio la libreria
+  viene spostata in `MicFX Data` (rename atomico); se i file sono in uso si continua a usare la vecchia posizione.
 - Se `index.json` e il suo `.bak` sono illeggibili ma esistono file `.sbpcm`, l'engine ricostruisce l'indice
   ("Suono recuperato N") invece di perdere la libreria. Gli orfani si cancellano solo con un indice valido.
 

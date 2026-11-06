@@ -14,7 +14,8 @@ senti in cuffia. Resta nella tray e a riposo non consuma CPU.
 - **Import** con trascinamento o selettore: MP3, WAV, FLAC, OGG, M4A. Volumi livellati in automatico (EBU R128).
 - Guida di configurazione con Discord che si spunta da sola, relay del push-to-talk, avvio con Windows.
 
-I dati restano sul PC (`%APPDATA%\MicFX`, `%LOCALAPPDATA%\MicFX`) e sopravvivono ad aggiornamenti e reinstallazioni.
+I dati restano sul PC (`%APPDATA%\MicFX` per le impostazioni, `%LOCALAPPDATA%\MicFX Data` per i suoni) e
+sopravvivono ad aggiornamenti e reinstallazioni: sono separati dalla cartella del programma.
 
 ## Requisiti
 

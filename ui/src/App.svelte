@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { primaryMod } from './lib/util/platform';
   import { setLucideProps } from '@lucide/svelte/context';
   import { onMount } from 'svelte';
 
@@ -53,7 +54,8 @@
 
   function onkeydown(e: KeyboardEvent) {
     if (!app.ready || app.capturing) return;
-    const ctrl = e.ctrlKey || e.metaKey;
+    // ⌘ su Mac, Ctrl su Windows: su Mac Ctrl+clic è il clic destro e Ctrl+tasto non è una scorciatoia.
+    const ctrl = primaryMod(e);
     const typing = isTypingTarget(e.target);
     if (ctrl && (e.key === 'f' || e.key === 'F')) {
       e.preventDefault();
@@ -88,7 +90,7 @@
       } else if (app.selection.size) {
         app.selection.clear();
       }
-    } else if (!typing && !ctrl && !e.altKey && e.key.length === 1 && e.key !== ' ' && e.key !== '?') {
+    } else if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1 && e.key !== ' ' && e.key !== '?') {
       // Basta scrivere per cercare.
       searchInput?.focus();
     }

@@ -1,6 +1,8 @@
 <script lang="ts">
   // Cattura di una scorciatoia: clic → premi la combinazione. Esc annulla, Canc/⌫ rimuove.
-  // Durante la cattura le hotkey globali sono in pausa, altrimenti Windows le "ruberebbe".
+  // Durante la cattura le hotkey globali sono in pausa, altrimenti il sistema le "ruberebbe".
+  // Su Mac ⌘ è registrato come modificatore "Win" del core (Command).
+  import { isMac } from '../util/platform';
   import type { HotkeyAction } from '../api';
   import { TriangleAlert, X } from '../icons';
   import { app } from '../stores/app.svelte';
@@ -72,7 +74,9 @@
     if (c.kind === 'cancel') return stop();
     if (c.kind === 'clear') return commit(null);
     warn = c.noModifiers
-      ? 'Senza Ctrl, Alt o Maiusc questo tasto smette di funzionare nelle altre app finché MicFX è aperto.'
+      ? isMac
+        ? 'Senza ⌘, ⌥, ⌃ o ⇧ questo tasto smette di funzionare nelle altre app finché MicFX è aperto.'
+        : 'Senza Ctrl, Alt o Maiusc questo tasto smette di funzionare nelle altre app finché MicFX è aperto.'
       : '';
     const owner = app.hotkeyOwner(c.accelerator, action);
     if (owner) {

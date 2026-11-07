@@ -20,7 +20,7 @@ use mfx_platform::discord::DiscordVoice;
 use crate::api::*;
 use crate::config::{self, HotkeyBinding, OutputSettings, Settings, WindowRect};
 use crate::paths::Paths;
-use crate::platform::{BusParams, MicEndpoint, Platform, RegisterError};
+use crate::platform::{BusParams, MicEndpoint, MicRoute, Platform, RegisterError};
 
 const SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 const DEVICE_DEBOUNCE: Duration = Duration::from_millis(150);
@@ -476,6 +476,29 @@ impl Engine {
                 _ => {}
             }
         }
+        self.update_mic_bridge();
+    }
+
+    /// Bridge del microfono (modo Bridge): il microfono scelto, se c'è ancora, altrimenti il predefinito,
+    /// mai il cavo. L'ID si risolve qui, così cambiare il predefinito sposta anche il bridge.
+    fn update_mic_bridge(&mut self) {
+        let route = if self.settings.mic.mode == config::MicMode::Bridge {
+            let cable = self.effective_cable().map(|c| c.id.clone());
+            let mics = || self.raw_mics.iter().filter(|m| !m.is_cable);
+            let wanted = self.settings.mic.device_id.as_deref();
+            let mic = wanted
+                .and_then(|id| mics().find(|m| m.id == id))
+                .or_else(|| mics().find(|m| m.is_default))
+                .or_else(|| mics().next())
+                .map(|m| m.id.clone());
+            match (cable, mic) {
+                (Some(cable_id), Some(mic_id)) => Some(MicRoute { mic_id: Some(mic_id), cable_id }),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        self.platform.set_mic_bridge(route);
     }
 
     fn reopen_default_monitor(&mut self) {
@@ -864,10 +887,12 @@ impl Engine {
             self.ptt_down = Some(sc);
             crate::PTT_PRESSED.store(sc as u32, std::sync::atomic::Ordering::SeqCst);
         } else {
-            self.notice(
-                ErrorCode::PttSendFailed,
-                "Windows ha bloccato il tasto push-to-talk: Discord è avviato come amministratore?".into(),
-            );
+            let msg = if cfg!(target_os = "macos") {
+                "macOS ha bloccato il tasto push-to-talk: consenti MicFX in Impostazioni di Sistema → Privacy e                  sicurezza → Accessibilità."
+            } else {
+                "Windows ha bloccato il tasto push-to-talk: Discord è avviato come amministratore?"
+            };
+            self.notice(ErrorCode::PttSendFailed, msg.into());
         }
     }
 
@@ -920,6 +945,19 @@ impl Engine {
         if !paused_out {
             slot.conflict = conflict;
         }
+    }
+
+    /// Il sistema ha rifiutato in ritardo una hotkey già data per registrata (macOS: Carbon risponde
+    /// sul thread principale).
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub(crate) fn hotkey_rejected(&mut self, id: i32, conflict: bool) {
+        let Some(slot) = self.hotkeys.iter_mut().find(|h| h.id == id) else { return };
+        if !slot.active {
+            return;
+        }
+        slot.active = false;
+        slot.conflict = conflict;
+        self.emit_hotkeys();
     }
 
     fn hotkey_views(&self) -> Vec<Hotkey> {
@@ -1149,6 +1187,7 @@ impl Engine {
         }
         if old.outputs.cable.device_id != self.settings.outputs.cable.device_id
             || old.outputs.monitor.device_id != self.settings.outputs.monitor.device_id
+            || old.mic != self.settings.mic
         {
             self.apply_effective_devices();
         }
@@ -1685,6 +1724,7 @@ impl Engine {
         for h in self.hotkeys.iter().filter(|h| h.active) {
             self.platform.unregister_hotkey(h.id);
         }
+        self.platform.set_mic_bridge(None);
         tracing::info!("engine fermo");
     }
 }

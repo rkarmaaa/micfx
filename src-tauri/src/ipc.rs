@@ -154,14 +154,15 @@ pub async fn get_diagnostics(core: State<'_, CoreHandle>) -> ApiResult<Diagnosti
 
 #[tauri::command(rename_all = "snake_case")]
 pub fn open_sound_settings(tab: u8) -> ApiResult<()> {
-    let tab = if matches!(tab, 0 | 1 | 3) { tab } else { 0 };
+    let tab = if matches!(tab, 0..=3) { tab } else { 0 };
     mfx_core::open_sound_control_panel(tab).map_err(|e| ApiError::new(ErrorCode::IoError, e.to_string()))
 }
 
 #[tauri::command(rename_all = "snake_case")]
 pub fn open_data_folder() -> ApiResult<()> {
     let dir = mfx_core::Paths::from_env().local;
-    std::process::Command::new("explorer.exe")
+    let program = if cfg!(windows) { "explorer.exe" } else { "open" };
+    std::process::Command::new(program)
         .arg(dir)
         .spawn()
         .map(|_| ())
@@ -173,20 +174,35 @@ pub fn open_data_folder() -> ApiResult<()> {
 pub fn open_link(which: String) -> ApiResult<()> {
     let url = match which.as_str() {
         "vb-cable" => "https://vb-audio.com/Cable/",
+        // Cavo virtuale gratuito per macOS.
+        "blackhole" => "https://existential.audio/blackhole/",
         "discord-voice" => "https://support.discord.com/hc/it/articles/360045138471",
         // Protocollo registrato dal client: apre Discord (sulle impostazioni voce, se le riconosce).
         "discord-app" => "discord://-/settings/voice",
         "github" => "https://github.com/rkarmaaa/micfx",
         _ => return Err(ApiError::new(ErrorCode::InvalidArgument, "Collegamento sconosciuto.")),
     };
-    std::process::Command::new("rundll32.exe")
-        .args(["url.dll,FileProtocolHandler", url])
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| ApiError::new(ErrorCode::IoError, e.to_string()))
+    open_with_system(std::ffi::OsStr::new(url))
 }
 
-/// Allinea la chiave Run di Windows all'impostazione (anche dopo una reinstallazione in un altro percorso).
+/// Apre un percorso o un URL con l'applicazione predefinita del sistema.
+fn open_with_system(target: &std::ffi::OsStr) -> ApiResult<()> {
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = std::process::Command::new("rundll32.exe");
+        c.arg("url.dll,FileProtocolHandler").arg(target);
+        c
+    };
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.arg(target);
+        c
+    };
+    cmd.spawn().map(|_| ()).map_err(|e| ApiError::new(ErrorCode::IoError, e.to_string()))
+}
+
+/// Allinea l'avvio automatico (chiave Run di Windows, LaunchAgent su macOS) all'impostazione (anche dopo una reinstallazione in un altro percorso).
 pub fn sync_autostart(app: &AppHandle, enabled: bool) {
     use tauri_plugin_autostart::ManagerExt;
     let al = app.autolaunch();

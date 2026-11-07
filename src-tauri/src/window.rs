@@ -24,7 +24,7 @@ pub fn show(app: &AppHandle) {
 fn create(app: &AppHandle) -> tauri::Result<()> {
     let core = app.state::<CoreHandle>().inner().clone();
     let saved = core.get_settings().ok().and_then(|s| s.ui.window);
-    // Un solo tema, scuro: barra del titolo scura anche con Windows in tema chiaro, e sfondo già
+    // Un solo tema, scuro: barra del titolo scura anche con il sistema in tema chiaro, e sfondo già
     // scuro (#161616, come --bg) così l'apertura non lampeggia di bianco prima del primo frame.
     let mut b = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App("index.html".into()))
         .title("MicFX")
@@ -119,6 +119,14 @@ fn on_screen(app: &AppHandle, r: &WindowRect) -> bool {
 }
 
 /// WebView nascosta: invisibile e sospesa, memoria al livello basso (SPEC §10.2).
+/// Su macOS WKWebView si sospende da sola quando la finestra è nascosta: niente da fare.
+#[cfg(not(windows))]
+fn suspend(_w: &WebviewWindow) {}
+
+#[cfg(not(windows))]
+fn resume(_w: &WebviewWindow) {}
+
+#[cfg(windows)]
 fn suspend(w: &WebviewWindow) {
     let _ = w.with_webview(|wv| {
         use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_3;
@@ -138,6 +146,7 @@ fn suspend(w: &WebviewWindow) {
     });
 }
 
+#[cfg(windows)]
 fn resume(w: &WebviewWindow) {
     let _ = w.with_webview(|wv| {
         use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_3;

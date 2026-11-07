@@ -1,11 +1,11 @@
-//! Interfaccia tra engine e bus (SPEC §13 `sink.rs`): bus WASAPI reale e bus offline per i test.
+//! Interfaccia tra engine e bus (SPEC §13 `sink.rs`): bus reale (WASAPI o CoreAudio) e bus offline per i test.
 
 use std::sync::atomic::{AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::mixer::{Mixer, MixerCmd, SoundRef};
 
-/// Risveglio dell'engine (evento Win32 nel codice reale). Chiamabile dal thread audio: niente alloc.
+/// Risveglio dell'engine (evento Win32 o semaforo Mach nel codice reale). Chiamabile dal thread audio: niente alloc.
 pub trait Wake: Send + Sync {
     fn wake(&self);
 }
@@ -44,6 +44,11 @@ impl DeviceId {
         self.len == 0
     }
 
+    /// L'ID come stringa (fuori dal thread audio: alloca).
+    pub fn to_string_lossy(&self) -> String {
+        String::from_utf16_lossy(&self.buf[..self.len as usize])
+    }
+
     /// UTF-16 terminato da NUL, pronto per `PCWSTR`.
     pub fn as_wide_nul(&self) -> &[u16] {
         &self.buf[..self.len as usize + 1]
@@ -57,6 +62,20 @@ impl std::fmt::Debug for DeviceId {
         } else {
             write!(f, "DeviceId({})", String::from_utf16_lossy(&self.buf[..self.len as usize]))
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BusTiming {
+    /// Silenzio dopo cui lo stream va in pausa calda.
+    pub idle_stop_ms: u32,
+    /// Pausa calda dopo cui il client viene rilasciato.
+    pub warm_hold_ms: u32,
+}
+
+impl Default for BusTiming {
+    fn default() -> Self {
+        Self { idle_stop_ms: 2000, warm_hold_ms: 60_000 }
     }
 }
 

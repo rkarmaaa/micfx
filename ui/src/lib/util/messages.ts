@@ -1,7 +1,8 @@
 // Testi per l'utente a partire dai codici stabili del core (SPEC §15.1: "i testi li decide la UI").
 import type { ErrorCode } from '../api';
+import { isMac } from './platform';
 
-export const STATUS_TEXT: Partial<Record<ErrorCode, { title: string; body: string }>> = {
+const WINDOWS_STATUS: Partial<Record<ErrorCode, { title: string; body: string }>> = {
   cable_missing: {
     title: 'VB-Cable non trovato',
     body: 'Senza VB-Cable i tuoi amici non sentono i suoni: li senti solo tu. Installalo una volta e riavvia il PC.',
@@ -36,6 +37,34 @@ export const STATUS_TEXT: Partial<Record<ErrorCode, { title: string; body: strin
   },
 };
 
+/** Su Mac: BlackHole al posto di VB-Cable, Impostazioni di Sistema al posto del pannello audio. */
+const MAC_STATUS: Partial<Record<ErrorCode, { title: string; body: string }>> = {
+  cable_missing: {
+    title: 'BlackHole non trovato',
+    body: 'Senza un microfono virtuale i tuoi amici non sentono i suoni: li senti solo tu. Installa BlackHole 2ch (gratuito).',
+  },
+  default_is_cable: {
+    title: "BlackHole è l'uscita predefinita",
+    body: "Così non senti più l'audio del Mac. In Impostazioni di Sistema → Suono → Uscita scegli le cuffie o gli altoparlanti.",
+  },
+  discord_wrong_input: {
+    title: 'Discord non ascolta il microfono virtuale',
+    body: 'In Discord → Voce e video → Dispositivo di input: BlackHole 2ch.',
+  },
+  rate_mismatch: {
+    title: 'Frequenza diversa da 48 kHz',
+    body: 'Funziona lo stesso, ma per la qualità migliore imposta 48000 Hz su cuffie e BlackHole in Configurazione MIDI Audio.',
+  },
+  cable_busy: {
+    title: 'BlackHole occupato',
+    body: "Un'altra app usa BlackHole in modo esclusivo. Chiudila e riprova.",
+  },
+};
+
+export const STATUS_TEXT: Partial<Record<ErrorCode, { title: string; body: string }>> = isMac
+  ? { ...WINDOWS_STATUS, ...MAC_STATUS }
+  : WINDOWS_STATUS;
+
 export const ERROR_TEXT: Partial<Record<ErrorCode, string>> = {
   hotkey_conflict: 'Combinazione già usata da un\'altra app.',
   hotkey_invalid: 'Combinazione non valida.',
@@ -51,7 +80,7 @@ export const ERROR_TEXT: Partial<Record<ErrorCode, string>> = {
   folder_exists: 'Esiste già una cartella con questo nome.',
   outputs_disabled: 'Microfono e cuffie sono disattivati.',
   device_lost: 'Dispositivo audio non disponibile.',
-  ptt_send_failed: 'Push-to-talk bloccato da Windows.',
+  ptt_send_failed: isMac ? 'Push-to-talk bloccato: serve il permesso Accessibilità.' : 'Push-to-talk bloccato da Windows.',
   internal: 'Errore interno.',
 };
 

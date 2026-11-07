@@ -1,5 +1,8 @@
 // Tastiera: KeyboardEvent → nomi del core (posizione fisica, come `KeyboardEvent.code`) e
 // viceversa → etichette leggibili secondo il layout attivo (es. "è" su tastiera italiana).
+// Su Mac il modificatore "Win" del core è ⌘ (Command) e le etichette usano i simboli di macOS (⌃⌥⇧⌘).
+
+import { isMac } from './platform';
 
 const CODE_TO_NAME: Record<string, string> = {
   Space: 'Space', Enter: 'Enter', NumpadEnter: 'Enter', Tab: 'Tab', Backspace: 'Backspace', Escape: 'Escape',
@@ -83,8 +86,12 @@ export function onLayoutLoaded(f: () => void) {
   layoutListeners.push(f);
 }
 
+const MOD_LABELS: Record<string, string> = isMac
+  ? { Ctrl: '⌃', Alt: '⌥', Shift: '⇧', Win: '⌘' }
+  : { Ctrl: 'Ctrl', Alt: 'Alt', Shift: 'Maiusc', Win: 'Win' };
+
 const LABELS: Record<string, string> = {
-  Ctrl: 'Ctrl', Alt: 'Alt', Shift: 'Maiusc', Win: 'Win',
+  ...MOD_LABELS,
   Space: 'Spazio', Enter: 'Invio', Tab: 'Tab', Backspace: '⌫', Escape: 'Esc', Insert: 'Ins', Delete: 'Canc',
   Home: 'Home', End: 'Fine', PageUp: 'Pag ↑', PageDown: 'Pag ↓', Up: '↑', Down: '↓', Left: '←', Right: '→',
   Pause: 'Pausa', ScrollLock: 'Bloc Scorr', PrintScreen: 'Stamp', CapsLock: 'Bloc Maiusc',
@@ -103,7 +110,10 @@ export function keyLabel(name: string): string {
 }
 
 function formatParts(parts: string[]): string {
-  return parts.map((p) => (p === '…' ? '…' : keyLabel(p))).join(' + ');
+  const labels = parts.map((p) => (p === '…' ? '…' : keyLabel(p)));
+  // Mac: "⌃⌥⌘1", come nei menu di macOS (l'ordine del core è già quello di Apple).
+  if (isMac) return labels.join('');
+  return labels.join(' + ');
 }
 
 export function formatAccelerator(acc: string | null | undefined): string {

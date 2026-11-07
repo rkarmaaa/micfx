@@ -5,7 +5,10 @@
 # contiene il nome utente di chi l'ha compilato. Il resto dei flag è quello di .cargo/config.toml
 # (CARGO_ENCODED_RUSTFLAGS li sostituisce, non li somma: vanno ripetuti qui).
 #
-# Uso, dalla radice del repository:  powershell -File tools/release/build.ps1
+# Uso, dalla radice del repository:  powershell -File tools/release/build.ps1 [-OutDir <cartella>]
+# (la versione per Mac: tools/release/build-macos.sh, su un Mac; le release su GitHub le fa
+# .github/workflows/release.yml per entrambi i sistemi.)
+param([string]$OutDir = '')
 $ErrorActionPreference = 'Stop'
 
 $sep = [char]0x1f
@@ -24,4 +27,8 @@ if (Select-String -Path $exe -Pattern "\$user\" -SimpleMatch -Quiet) {
 }
 Get-ChildItem (Join-Path (Split-Path $exe) 'bundle\nsis\*.exe') | ForEach-Object {
   "{0}  {1}" -f (Get-FileHash $_ -Algorithm SHA256).Hash.ToLower(), $_.Name
+  if ($OutDir) {
+    New-Item -ItemType Directory -Force $OutDir | Out-Null
+    Copy-Item $_ $OutDir
+  }
 }

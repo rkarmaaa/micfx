@@ -2342,6 +2342,7 @@ name = "mfx-platform"
 version = "1.0.1"
 dependencies = [
  "crossbeam-channel",
+ "mfx-audio",
  "serde_json",
  "snap",
  "thiserror 2.0.21",

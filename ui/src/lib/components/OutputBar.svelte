@@ -1,5 +1,6 @@
 <script lang="ts">
   // Volumi in basso: cuffie (quello che senti tu) e microfono virtuale (quello che sentono gli altri).
+  import { CABLE_NAME } from '../util/platform';
   import type { BusKind } from '../api';
   import { ChevronDown, Headphones, Mic, MicOff, TriangleAlert } from '../icons';
   import { app } from '../stores/app.svelte';
@@ -35,7 +36,7 @@
     if (!s) return '';
     if (bus === 'cable') {
       const d = app.devices.find((x) => x.id === s.outputs.cable.device_id) ?? app.devices.find((x) => x.is_cable);
-      return d ? d.name : 'VB-Cable non trovato';
+      return d ? d.name : `${CABLE_NAME} non trovato`;
     }
     const d = s.outputs.monitor.device_id ? app.devices.find((x) => x.id === s.outputs.monitor.device_id) : null;
     const def = app.devices.find((x) => x.is_default);
@@ -70,7 +71,7 @@
             onclick={() => (unavailable ? (app.guideOpen = true) : app.openSettings('audio'))}
           >
             {#if unavailable}<TriangleAlert size={12} />{/if}
-            <span>{unavailable ? 'VB-Cable non trovato · Configura' : deviceName(r.bus)}</span>
+            <span>{unavailable ? `${CABLE_NAME} non trovato · Configura` : deviceName(r.bus)}</span>
             {#if !unavailable}<ChevronDown size={12} />{/if}
           </button>
         </div>

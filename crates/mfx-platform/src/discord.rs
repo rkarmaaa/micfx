@@ -41,7 +41,7 @@ fn is_media_engine_key(k: &[u8]) -> bool {
 /// Legge le impostazioni del client Discord usato più di recente. `None` se Discord non c'è, non è
 /// mai entrato in un canale vocale o il formato non è riconosciuto.
 pub fn read_voice_settings() -> Option<DiscordVoice> {
-    let appdata = std::env::var_os("APPDATA").map(PathBuf::from)?;
+    let appdata = app_data_dir()?;
     let mut best: Option<(SystemTime, DiscordVoice)> = None;
     for (dir, client) in CLIENTS {
         let db = appdata.join(dir).join("Local Storage").join("leveldb");
@@ -51,6 +51,18 @@ pub fn read_voice_settings() -> Option<DiscordVoice> {
         }
     }
     best.map(|(_, v)| v)
+}
+
+/// `%APPDATA%` su Windows, `~/Library/Application Support` su macOS: lì Discord tiene i suoi dati.
+fn app_data_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library").join("Application Support"))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::env::var_os("APPDATA").map(PathBuf::from)
+    }
 }
 
 /// Impostazioni da un database LevelDB, con la data dell'ultima modifica del database.

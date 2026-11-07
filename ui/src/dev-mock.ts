@@ -4,6 +4,7 @@ import { emit } from '@tauri-apps/api/event';
 import { mockIPC, mockWindows } from '@tauri-apps/api/mocks';
 
 import type { Folder, Settings, Snapshot, Sound } from './lib/api';
+import { isMac } from './lib/util/platform';
 
 const q = new URLSearchParams(location.search);
 const NAMES: [string, string][] = [
@@ -47,7 +48,7 @@ let settings: Settings = {
     cable: { device_id: null, volume_db: 0, enabled: true },
     monitor: { device_id: null, volume_db: -6, enabled: true },
   },
-  mic: { mode: 'system' },
+  mic: { mode: isMac ? 'bridge' : 'system', device_id: null },
   playback: { max_voices: 32, default_mode: 'overlap', fade_in_ms: 2, fade_out_ms: 8, idle_stop_ms: 2000, warm_hold_ms: 60000 },
   loudness: { target_lufs: -18, ceiling_dbtp: -1, trim_silence: true },
   library: { max_duration_s: 300 },

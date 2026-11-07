@@ -1,6 +1,7 @@
 <script lang="ts">
-  // Griglia o elenco dei suoni. Clic = suona. Ctrl/Maiusc+clic = seleziona. Trascina = riordina
+  // Griglia o elenco dei suoni. Clic = suona. Ctrl (⌘ su Mac)/Maiusc+clic = seleziona. Trascina = riordina
   // o sposta in una cartella. Frecce, Invio, F2, Canc come in Esplora risorse.
+  import { isMac, primaryMod } from '../util/platform';
   import { app, soundEmoji } from '../stores/app.svelte';
   import { isTypingTarget } from '../util/keys';
   import SoundItem from './SoundItem.svelte';
@@ -69,7 +70,7 @@
       return;
     }
     if (app.renamingId === id) return;
-    if (e.ctrlKey || e.metaKey) return app.select(id, 'toggle');
+    if (primaryMod(e)) return app.select(id, 'toggle');
     if (e.shiftKey) return app.select(id, 'range');
     app.playFromClick(id);
   }
@@ -90,7 +91,7 @@
       e.preventDefault();
       const j = Math.max(0, Math.min(ids.length - 1, i));
       if (e.shiftKey) app.select(ids[j], 'range');
-      else if (e.ctrlKey) app.focusId = ids[j];
+      else if (primaryMod(e)) app.focusId = ids[j];
       else app.select(ids[j], 'single');
     };
     const cols = columns();
@@ -117,7 +118,7 @@
     }
     const id = cur >= 0 ? ids[cur] : null;
     if (!id) return;
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    if (e.key === 'Enter' && primaryMod(e)) {
       e.preventDefault();
       app.editorId = id;
     } else if (e.key === 'Enter' || e.key === ' ') {
@@ -127,18 +128,19 @@
     } else if (e.key === 'F2') {
       e.preventDefault();
       app.renamingId = id;
-    } else if (e.key === 'Delete') {
+    } else if (e.key === 'Delete' || (isMac && e.key === 'Backspace' && e.metaKey)) {
+      // Su Mac il tasto "delete" è Backspace: ⌘⌫ come nel Finder.
       e.preventDefault();
       app.deleteSounds(app.targets(id));
     } else if (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey)) {
       e.preventDefault();
       const r = container.querySelector(`[data-sound-id="${CSS.escape(id)}"]`)!.getBoundingClientRect();
       openMenuAt(id, r.left + 12, r.top + 12);
-    } else if ((e.key === 'e' || e.key === 'E') && (e.ctrlKey || e.metaKey)) {
+    } else if ((e.key === 'e' || e.key === 'E') && primaryMod(e)) {
       e.preventDefault();
       const r = container.querySelector(`[data-sound-id="${CSS.escape(id)}"]`)!.getBoundingClientRect();
       app.emojiTarget = { soundId: id, x: r.left, y: r.bottom + 4 };
-    } else if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) {
+    } else if ((e.key === 'a' || e.key === 'A') && primaryMod(e)) {
       e.preventDefault();
       app.selection.clear();
       ids.forEach((x) => app.selection.add(x));

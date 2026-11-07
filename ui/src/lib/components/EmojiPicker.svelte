@@ -403,7 +403,7 @@
             </div>
           {:else}
             <p class="note" style:transform="translateY({r.top}px)">
-              {data.hidden} emoji molto recenti non sono mostrate: il font di Windows di questo PC non sa ancora disegnarle.
+              {data.hidden} emoji molto recenti non sono mostrate: il font di sistema di questo computer non sa ancora disegnarle.
             </p>
           {/if}
         {/each}

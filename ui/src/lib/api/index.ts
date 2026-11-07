@@ -97,10 +97,10 @@ export const api = {
   setOutput: (bus: BusKind, patch: OutputPatch) => call<ErrorCode[]>('set_output', { bus, patch }),
   updateSettings: (patch: DeepPartial<Settings>) => call<Settings>('update_settings', { patch }),
   getDiagnostics: () => call<Diagnostics>('get_diagnostics'),
-  /** Pannello audio di Windows: 0 Riproduzione, 1 Registrazione, 3 Comunicazioni. */
-  openSoundSettings: (tab: 0 | 1 | 3) => call<void>('open_sound_settings', { tab }),
+  /** Windows: pannello audio (0 Riproduzione, 1 Registrazione, 3 Comunicazioni). macOS: Impostazioni Suono (0 Uscita, 1 Ingresso). */
+  openSoundSettings: (tab: 0 | 1 | 2 | 3) => call<void>('open_sound_settings', { tab }),
   openDataFolder: () => call<void>('open_data_folder'),
-  openLink: (which: 'vb-cable' | 'discord-voice' | 'discord-app' | 'github') => call<void>('open_link', { which }),
+  openLink: (which: 'vb-cable' | 'blackhole' | 'discord-voice' | 'discord-app' | 'github') => call<void>('open_link', { which }),
 };
 
 export type EventMap = {

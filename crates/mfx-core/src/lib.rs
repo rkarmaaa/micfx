@@ -25,7 +25,7 @@ pub use mfx_platform::open_sound_control_panel;
 pub use paths::Paths;
 
 use engine::{Command, Engine};
-use platform::{Platform, WindowsPlatform};
+use platform::Platform;
 
 /// Scancode del tasto PTT premuto (0 = nessuno). Letto dal panic hook per il rilascio garantito.
 pub(crate) static PTT_PRESSED: AtomicU32 = AtomicU32::new(0);
@@ -46,9 +46,16 @@ pub struct CoreHandle {
 }
 
 impl CoreHandle {
-    /// Avvia l'engine con dispositivi, hotkey e bus WASAPI reali.
+    /// Avvia l'engine con dispositivi, hotkey e bus audio reali del sistema.
+    #[cfg(windows)]
     pub fn start(paths: Paths, sink: Arc<dyn EventSink>) -> std::io::Result<Self> {
-        Self::start_with(paths, sink, |tx, waker| Box::new(WindowsPlatform::new(tx, waker)))
+        Self::start_with(paths, sink, |tx, waker| Box::new(platform::WindowsPlatform::new(tx, waker)))
+    }
+
+    /// Avvia l'engine con dispositivi, hotkey e bus audio reali del sistema.
+    #[cfg(target_os = "macos")]
+    pub fn start(paths: Paths, sink: Arc<dyn EventSink>) -> std::io::Result<Self> {
+        Self::start_with(paths, sink, |tx, waker| Box::new(platform::MacPlatform::new(tx, waker)))
     }
 
     /// Avvia l'engine con una piattaforma a scelta (test).
@@ -62,6 +69,7 @@ impl CoreHandle {
         let (ready_tx, ready_rx) = bounded::<()>(1);
         let (etx, ewaker) = (tx.clone(), waker.clone());
         let join = std::thread::Builder::new().name("mfx-engine".into()).spawn(move || {
+            #[cfg(windows)]
             let _com = mfx_platform::com::ComGuard::mta();
             let platform = make_platform(etx.clone(), ewaker.clone());
             let engine = Engine::new(paths, sink, platform, ewaker, etx);

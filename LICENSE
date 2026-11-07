@@ -1,0 +1,32 @@
+MicFX
+Copyright (c) 2026 Marco. Tutti i diritti riservati.
+
+Il codice sorgente di MicFX è pubblicato solo per consultazione. Non è concessa alcuna licenza
+sul codice: senza il permesso scritto dell'autore non è consentito copiarlo, modificarlo,
+distribuirlo, ripubblicarlo o usarlo in altri progetti, in tutto o in parte. Restano i diritti
+che le Condizioni d'uso di GitHub riconoscono agli utenti della piattaforma (visualizzare il
+repository e crearne un fork su GitHub).
+
+Gli installer pubblicati nelle release ufficiali di questo repository possono essere scaricati
+e usati liberamente per uso personale. Il software è fornito "così com'è", senza garanzie di
+alcun tipo; l'autore non risponde di danni derivanti dal suo uso.
+
+Componenti di terze parti, ciascuno sotto la propria licenza:
+- Font "Twemoji Country Flags" (ui/public/fonts): grafica di Twemoji, CC BY 4.0
+  (https://creativecommons.org/licenses/by/4.0/), font di TalkJS (MIT).
+- Font Schibsted Grotesk: SIL Open Font License 1.1.
+- Icone Lucide: licenza ISC.
+- Dati emoji di Emojibase: licenza MIT.
+- Le dipendenze Rust e npm elencate in Cargo.lock e package-lock.json, con le loro licenze.
+
+------------------------------------------------------------------------------------------------
+
+MicFX
+Copyright (c) 2026 Marco. All rights reserved.
+
+The source code is published for reference only. No license is granted: you may not copy,
+modify, distribute, republish or reuse it, in whole or in part, without the author's written
+permission, except for the rights granted to users by the GitHub Terms of Service (viewing and
+forking on GitHub). The installers attached to the official releases may be downloaded and used
+for personal use. The software is provided "as is", without warranty of any kind.
+Third-party components remain under their own licenses, listed above.

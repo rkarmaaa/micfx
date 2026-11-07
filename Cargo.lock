@@ -2291,7 +2291,7 @@ dependencies = [
 
 [[package]]
 name = "mfx-audio"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "assert_no_alloc",
  "criterion",
@@ -2304,7 +2304,7 @@ dependencies = [
 
 [[package]]
 name = "mfx-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "crossbeam-channel",
  "memmap2",
@@ -2321,7 +2321,7 @@ dependencies = [
 
 [[package]]
 name = "mfx-library"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "ebur128",
  "memmap2",
@@ -2339,7 +2339,7 @@ dependencies = [
 
 [[package]]
 name = "mfx-platform"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "crossbeam-channel",
  "serde_json",
@@ -2352,7 +2352,7 @@ dependencies = [
 
 [[package]]
 name = "micfx"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "mfx-core",
  "serde",

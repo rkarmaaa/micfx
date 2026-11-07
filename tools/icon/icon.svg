@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Icona di MicFX: lo stesso microfono Lucide (tratto 2,4) del marchio della UI, bianco su #4F46E5. -->
+  <rect x="32" y="32" width="960" height="960" rx="250" fill="#4F46E5"/>
+  <g transform="translate(212 212) scale(25)" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 19v3"/>
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+    <rect x="9" y="2" width="6" height="13" rx="3"/>
+  </g>
+</svg>

@@ -10,9 +10,6 @@
   font-display: swap;
 }
 
-// Chevron Lucide per le select (le data URI non leggono le variabili CSS: colore = --fg-muted).
-$chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-
 *,
 *::before,
 *::after {
@@ -218,7 +215,6 @@ button,
 // ------------------------------------------------------------------ campi
 
 input,
-select,
 textarea {
   font: inherit;
   color: inherit;
@@ -227,8 +223,8 @@ textarea {
 input[type='search'],
 input[type='text'],
 input:not([type]),
-select,
-textarea {
+textarea,
+.select {
   height: var(--h-md);
   padding: 0 10px;
   border: 1px solid var(--border-strong);
@@ -262,20 +258,99 @@ input[type='search']::-webkit-search-cancel-button {
   appearance: none;
 }
 
-select.sm,
 input.sm {
   height: var(--h-sm);
   font-size: var(--text-sm);
 }
 
-select {
-  appearance: none;
-  padding-right: 30px;
-  background-image: $chevron;
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  cursor: default;
-  text-overflow: ellipsis;
+// Select (componente Select.svelte): un campo che apre un elenco in popover.
+.select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 8px 0 10px;
+  font-weight: 450;
+  text-align: left;
+
+  &:hover:not(:disabled):not(:focus) {
+    background: var(--field);
+  }
+  &:active:not(:disabled) {
+    background: var(--field);
+    transform: none;
+  }
+  &.open {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-soft-2);
+  }
+  &.sm {
+    height: var(--h-sm);
+    padding: 0 6px 0 9px;
+    font-size: var(--text-sm);
+  }
+  .select-value {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .select-chevron {
+    flex: none;
+    color: var(--fg-muted);
+    transition: transform var(--t-fast) var(--ease);
+  }
+  &.open .select-chevron {
+    transform: rotate(180deg);
+  }
+}
+
+.listbox {
+  z-index: 80;
+  gap: 1px;
+  max-width: min(380px, calc(100vw - 16px));
+  max-height: 300px;
+  overflow-y: auto;
+  animation-duration: var(--t-fast);
+
+  &.up {
+    transform: translateY(-100%);
+    animation-name: pop-in-up;
+  }
+}
+
+.option {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--r-sm);
+  color: var(--fg-2);
+  font-size: var(--text-md);
+  font-weight: 450;
+  white-space: nowrap;
+
+  > span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .lucide {
+    flex: none;
+    color: var(--primary-text);
+  }
+  &.active {
+    background: var(--surface-2);
+    color: var(--fg);
+  }
+  &[aria-selected='true'] {
+    color: var(--fg);
+    font-weight: 550;
+  }
 }
 
 input[type='checkbox'],
@@ -442,6 +517,17 @@ code,
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+@keyframes pop-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-100% + 4px)) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-100%);
+  }
 }
 
 @keyframes pop-in {

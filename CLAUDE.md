@@ -68,6 +68,9 @@ impostazioni sopravvivono ad aggiornamenti e reinstallazioni. Non cambiare quest
   dei suoni sono contenuto, non icone.
 - Font **Schibsted Grotesk** (`@fontsource-variable`, locale: la CSP non ammette font esterni).
 - Mai colori, raggi o ombre scritti a mano nei componenti: solo i token.
+- Niente `<select>` native (il menu lo disegna Windows): usa `ui/src/lib/components/Select.svelte`.
+- Icona dell'app: `tools/icon/icon.svg` (stesso microfono Lucide della UI); `npx tauri icon tools/icon/icon.svg -o <tmp>`
+  e copia in `src-tauri/icons` solo i file già presenti.
 
 ## Convenzioni
 

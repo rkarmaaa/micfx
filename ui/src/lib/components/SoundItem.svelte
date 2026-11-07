@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Hotkey, PlayMode, Playing, Sound } from '../api';
-  import { CircleDot, Ellipsis, Headphones, Layers, Pencil, RotateCcw, Square, ToggleRight } from '../icons';
+  import { CircleDot, Headphones, Layers, RotateCcw, Square, ToggleRight } from '../icons';
   import { soundEmoji } from '../stores/app.svelte';
   import { formatAccelerator } from '../util/keys';
   import { formatDuration } from '../util/volume';
@@ -133,16 +133,11 @@
     >
   {/if}
 
-  <div class="actions">
-    {#if playing}
+  {#if playing}
+    <div class="actions">
       <button type="button" class="act" data-action="stop" title="Ferma" aria-label="Ferma {sound.name}"><Square size={12} fill="currentColor" /></button>
-    {/if}
-    <button type="button" class="act" data-action="preview" title="Ascolta solo tu (Maiusc+Invio)" aria-label="Anteprima solo in cuffia"
-      ><Headphones size={14} /></button
-    >
-    <button type="button" class="act" data-action="edit" title="Modifica (Ctrl+Invio)" aria-label="Modifica {sound.name}"><Pencil size={14} /></button>
-    <button type="button" class="act" data-action="menu" title="Altre azioni" aria-label="Altre azioni"><Ellipsis size={14} /></button>
-  </div>
+    </div>
+  {/if}
   {#if sound.mode && sound.mode !== defaultMode && view === 'grid'}
     {@const ModeIcon = MODE_ICON[sound.mode]}
     <span class="mode-dot" title="Modalità: {MODE_LABEL[sound.mode]}"><ModeIcon size={13} /></span>
@@ -316,24 +311,7 @@
     border-radius: var(--r-md);
     background: var(--surface);
     box-shadow: var(--shadow-sm);
-    opacity: 0;
-    transform: translateY(-2px);
-    pointer-events: none;
-    transition:
-      opacity var(--t-fast) var(--ease),
-      transform var(--t-fast) var(--ease);
     z-index: 2;
-  }
-  .grid:hover .actions,
-  .grid.focused:focus-visible .actions,
-  .grid:has(.actions :focus-visible) .actions,
-  .grid.playing .actions {
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-  }
-  .grid.playing:not(:hover) .actions [data-action]:not([data-action='stop']) {
-    display: none;
   }
   .mode-dot,
   .preview-badge {
@@ -355,7 +333,7 @@
   .list {
     display: grid;
     /* Colonne fisse: ogni riga è una griglia a sé, così restano allineate anche senza scorciatoia. */
-    grid-template-columns: 32px minmax(0, 1fr) 56px 84px 124px 110px;
+    grid-template-columns: 32px minmax(0, 1fr) 56px 84px 124px 28px;
     align-items: center;
     gap: 12px;
     min-height: 44px;
@@ -408,14 +386,6 @@
     justify-self: end;
     display: flex;
     gap: 2px;
-    opacity: 0;
-    transition: opacity var(--t-fast) var(--ease);
-  }
-  .list:hover .actions,
-  .list.focused:focus-visible .actions,
-  .list:has(.actions :focus-visible) .actions,
-  .list.playing .actions {
-    opacity: 1;
   }
 
   .hk {

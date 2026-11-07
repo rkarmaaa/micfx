@@ -62,16 +62,10 @@
       if (e.target === container) app.selection.clear();
       return;
     }
-    const action = (e.target as HTMLElement).closest<HTMLElement>('[data-action]')?.dataset.action;
-    if (action) {
+    // L'unica azione sul riquadro è Ferma: le altre stanno nel menu del tasto destro.
+    if ((e.target as HTMLElement).closest('[data-action="stop"]')) {
       e.stopPropagation();
-      if (action === 'preview') app.preview(id);
-      else if (action === 'stop') app.stop(id);
-      else if (action === 'edit') app.editorId = id;
-      else if (action === 'menu') {
-        const r = (e.target as HTMLElement).getBoundingClientRect();
-        openMenuAt(id, r.left, r.bottom + 2);
-      }
+      app.stop(id);
       return;
     }
     if (app.renamingId === id) return;

@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Barra superiore (#202020 in entrambi i temi): marchio, ricerca, azioni principali.
-  import { CircleHelp, Mic, Pause, Plus, Search, Settings, Square, X } from '../icons';
+  // Barra superiore (#202020): ricerca e azioni principali. Il nome dell'app è già nella barra del titolo di Windows.
+  import { CircleHelp, Pause, Plus, Search, Settings, Square, X } from '../icons';
   import { app } from '../stores/app.svelte';
 
   let { searchInput = $bindable() }: { searchInput?: HTMLInputElement } = $props();
@@ -9,11 +9,6 @@
 </script>
 
 <header class="bar">
-  <div class="brand">
-    <span class="logo" aria-hidden="true"><Mic size={15} strokeWidth={2.4} /></span>
-    <span class="word">MicFX</span>
-  </div>
-
   <div class="search">
     <Search size={16} class="lead" />
     <input
@@ -99,35 +94,12 @@
     align-items: center;
     gap: 8px;
     height: var(--bar-h);
-    padding: 0 10px 0 14px;
+    padding: 0 10px var(--bar-lift);
     background: var(--bar-bg);
     color: var(--bar-fg);
     border-bottom: 1px solid var(--bar-border);
     flex: none;
     color-scheme: dark;
-  }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    margin-right: 10px;
-    user-select: none;
-  }
-  .logo {
-    display: grid;
-    place-items: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 7px;
-    background: var(--primary);
-    color: #fff;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
-  }
-  .word {
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
   }
 
   .search {
@@ -264,14 +236,6 @@
     background: var(--bar-active);
   }
 
-  @media (max-width: 760px) {
-    .word {
-      display: none;
-    }
-    .brand {
-      margin-right: 4px;
-    }
-  }
   @media (max-width: 640px) {
     .stop .label,
     .paused .label,

@@ -2,6 +2,18 @@
   // Vista della libreria: griglia/elenco, dimensione dei riquadri, ordinamento.
   import { LayoutGrid, List } from '../icons';
   import { app, type SortMode, type TileSize, type ViewMode } from '../stores/app.svelte';
+  import Select from './Select.svelte';
+
+  const SIZES: { value: TileSize; label: string }[] = [
+    { value: 's', label: 'Piccoli' },
+    { value: 'm', label: 'Medi' },
+    { value: 'l', label: 'Grandi' },
+  ];
+  const SORTS: { value: SortMode; label: string }[] = [
+    { value: 'manual', label: 'Ordine personale' },
+    { value: 'name', label: 'Nome A–Z' },
+    { value: 'recent', label: 'Più recenti' },
+  ];
 
   const VIEWS: { v: ViewMode; label: string; icon: typeof LayoutGrid }[] = [
     { v: 'grid', label: 'Griglia (Ctrl+1)', icon: LayoutGrid },
@@ -11,29 +23,9 @@
 
 <div class="controls">
   {#if app.prefs.view === 'grid'}
-    <select
-      class="sm size"
-      aria-label="Dimensione riquadri"
-      title="Dimensione riquadri"
-      value={app.prefs.size}
-      onchange={(e) => app.setPrefs({ size: e.currentTarget.value as TileSize })}
-    >
-      <option value="s">Piccoli</option>
-      <option value="m">Medi</option>
-      <option value="l">Grandi</option>
-    </select>
+    <Select size="sm" class="size" label="Dimensione riquadri" title="Dimensione riquadri" value={app.prefs.size} options={SIZES} onchange={(v) => app.setPrefs({ size: v })} />
   {/if}
-  <select
-    class="sm"
-    aria-label="Ordina per"
-    title="Ordina per"
-    value={app.prefs.sort}
-    onchange={(e) => app.setPrefs({ sort: e.currentTarget.value as SortMode })}
-  >
-    <option value="manual">Ordine personale</option>
-    <option value="name">Nome A–Z</option>
-    <option value="recent">Più recenti</option>
-  </select>
+  <Select size="sm" label="Ordina per" title="Ordina per" value={app.prefs.sort} options={SORTS} onchange={(v) => app.setPrefs({ sort: v })} />
   <div class="seg" role="radiogroup" aria-label="Vista">
     {#each VIEWS as { v, label, icon: Icon } (v)}
       <button type="button" role="radio" aria-checked={app.prefs.view === v} title={label} aria-label={label} onclick={() => app.setPrefs({ view: v })}>
@@ -51,7 +43,7 @@
     flex: none;
   }
   @media (max-width: 760px) {
-    .size {
+    .controls :global(.size) {
       display: none;
     }
   }

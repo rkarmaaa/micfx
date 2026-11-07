@@ -27,9 +27,31 @@
     return set.size === 1 ? [...set][0] : undefined;
   });
 
-  const pos = $derived({
-    left: Math.max(4, Math.min(x, window.innerWidth - 240)),
-    top: Math.max(4, Math.min(y, window.innerHeight - 360)),
+  // Posizione misurata sul menu vero (cresce aprendo "Sposta in cartella"): come i menu di Windows, se non
+  // c'è spazio a destra o sotto si apre a sinistra o sopra il cursore, e resta sempre dentro la finestra.
+  const EDGE = 8;
+  let size = $state({ w: 0, h: 0 });
+  const pos = $derived.by(() => {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const left = x + size.w > vw - EDGE ? x - size.w : x;
+    const top = y + size.h > vh - EDGE ? y - size.h : y;
+    return {
+      left: Math.max(EDGE, Math.min(left, vw - size.w - EDGE)),
+      top: Math.max(EDGE, Math.min(top, vh - size.h - EDGE)),
+    };
+  });
+
+  const measure = () => (size = { w: root.offsetWidth, h: root.offsetHeight });
+
+  // Subito, prima del primo disegno; poi a ogni apertura del sottomenu e a ogni cambio (nuove cartelle).
+  $effect(() => {
+    void folderOpen;
+    measure();
+  });
+  $effect(() => {
+    const ro = new ResizeObserver(measure);
+    ro.observe(root);
+    return () => ro.disconnect();
   });
 
   $effect(() => {
@@ -169,6 +191,8 @@
   .menu {
     min-width: 260px;
     max-width: 320px;
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
   }
   .sub {
     display: flex;

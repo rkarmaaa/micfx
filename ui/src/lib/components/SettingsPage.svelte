@@ -24,6 +24,7 @@
   import { app } from '../stores/app.svelte';
   import { formatAccelerator, singleKeyFromEvent } from '../util/keys';
   import HotkeyInput from './HotkeyInput.svelte';
+  import Select from './Select.svelte';
   import Switch from './Switch.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
@@ -57,6 +58,13 @@
     { value: 'toggle', label: 'Play/Stop' },
     { value: 'exclusive', label: 'Esclusivo' },
   ];
+  const DURATION_STEPS = [60, 300, 600, 1800, 3600];
+  /** Durate proposte; un valore scritto a mano nel config.json resta visibile come voce in più. */
+  const DURATIONS = $derived.by(() => {
+    const cur = app.settings?.library.max_duration_s;
+    const steps = cur && !DURATION_STEPS.includes(cur) ? [...DURATION_STEPS, cur].sort((x, y) => x - y) : DURATION_STEPS;
+    return steps.map((v) => ({ value: v, label: v % 60 ? `${v} secondi` : `${v / 60} ${v === 60 ? 'minuto' : 'minuti'}` }));
+  });
   const MODE_HELP: Record<PlayMode, string> = {
     overlap: 'Ogni clic avvia una nuova copia, anche se il suono sta già suonando.',
     restart: 'Se il suono sta già suonando, riparte da capo.',
@@ -188,32 +196,29 @@
                 <span class="t">Cuffie</span>
                 <span class="d">Quello che senti tu. Di solito il dispositivo predefinito di Windows.</span>
               </div>
-              <select
+              <Select
                 class="ctl wide"
+                label="Cuffie"
                 value={s.outputs.monitor.device_id ?? ''}
-                onchange={(e) => app.setOutputDevice('monitor', e.currentTarget.value || null)}
-              >
-                <option value="">Predefinito di Windows</option>
-                {#each renderDevices as d (d.id)}
-                  <option value={d.id}>{d.name}{d.is_default ? ' (predefinito)' : ''}</option>
-                {/each}
-              </select>
+                options={[
+                  { value: '', label: 'Predefinito di Windows' },
+                  ...renderDevices.map((d) => ({ value: d.id, label: d.name + (d.is_default ? ' (predefinito)' : '') })),
+                ]}
+                onchange={(v) => app.setOutputDevice('monitor', v || null)}
+              />
             </div>
             <div class="row">
               <div class="text">
                 <span class="t">Microfono virtuale</span>
                 <span class="d">Quello che sentono gli altri: l'ingresso di VB-Cable (CABLE Input).</span>
               </div>
-              <select
+              <Select
                 class="ctl wide"
+                label="Microfono virtuale"
                 value={s.outputs.cable.device_id ?? ''}
-                onchange={(e) => app.setOutputDevice('cable', e.currentTarget.value || null)}
-              >
-                <option value="">Rileva VB-Cable automaticamente</option>
-                {#each app.devices as d (d.id)}
-                  <option value={d.id}>{d.name}</option>
-                {/each}
-              </select>
+                options={[{ value: '', label: 'Rileva VB-Cable automaticamente' }, ...app.devices.map((d) => ({ value: d.id, label: d.name }))]}
+                onchange={(v) => app.setOutputDevice('cable', v || null)}
+              />
             </div>
             {#if cableMissing}
               <div class="row callout">
@@ -269,15 +274,13 @@
                 <span class="t">Modalità predefinita</span>
                 <span class="d">{MODE_HELP[s.playback.default_mode]}</span>
               </div>
-              <select
+              <Select
                 class="ctl"
+                label="Modalità predefinita"
                 value={s.playback.default_mode}
-                onchange={(e) => app.updateSettings({ playback: { default_mode: e.currentTarget.value as PlayMode } })}
-              >
-                {#each MODES as m (m.value)}
-                  <option value={m.value}>{m.label}</option>
-                {/each}
-              </select>
+                options={MODES}
+                onchange={(v) => app.updateSettings({ playback: { default_mode: v } })}
+              />
             </div>
           </div>
         </section>
@@ -405,13 +408,13 @@
                 <span class="t">Durata massima</span>
                 <span class="d">I file più lunghi non vengono importati.</span>
               </div>
-              <select class="ctl" value={s.library.max_duration_s} onchange={(e) => app.updateSettings({ library: { max_duration_s: +e.currentTarget.value } })}>
-                <option value={60}>1 minuto</option>
-                <option value={300}>5 minuti</option>
-                <option value={600}>10 minuti</option>
-                <option value={1800}>30 minuti</option>
-                <option value={3600}>60 minuti</option>
-              </select>
+              <Select
+                class="ctl"
+                label="Durata massima"
+                value={s.library.max_duration_s}
+                options={DURATIONS}
+                onchange={(v) => app.updateSettings({ library: { max_duration_s: v } })}
+              />
             </div>
           </div>
         </section>
@@ -551,7 +554,7 @@
     align-items: center;
     gap: 8px;
     height: var(--bar-h);
-    padding: 0 10px;
+    padding: 0 10px var(--bar-lift);
     background: var(--bar-bg);
     color: var(--bar-fg);
     border-bottom: 1px solid var(--bar-border);
@@ -704,11 +707,12 @@
   .ctl {
     justify-self: end;
   }
-  select.ctl {
+  .row > :global(.select.ctl) {
+    justify-self: end;
     min-width: 180px;
     max-width: 300px;
   }
-  select.ctl.wide {
+  .row > :global(.select.ctl.wide) {
     width: 300px;
   }
   .inline {
@@ -902,7 +906,10 @@
     .ctl {
       justify-self: start;
     }
-    select.ctl.wide {
+    .row > :global(.select.ctl) {
+      justify-self: start;
+    }
+    .row > :global(.select.ctl.wide) {
       width: 100%;
       max-width: none;
     }

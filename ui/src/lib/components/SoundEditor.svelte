@@ -5,6 +5,7 @@
   import { formatDuration } from '../util/volume';
   import HotkeyInput from './HotkeyInput.svelte';
   import Modal from './Modal.svelte';
+  import Select from './Select.svelte';
 
   let { id, onclose }: { id: string; onclose: () => void } = $props();
 
@@ -126,12 +127,13 @@
 
     <fieldset>
       <legend>Cartella</legend>
-      <select value={s.folder_id ?? ''} onchange={(e) => app.moveToFolder([s.id], e.currentTarget.value || null)}>
-        <option value="">Nessuna</option>
-        {#each app.folders as f (f.id)}
-          <option value={f.id}>{f.name}</option>
-        {/each}
-      </select>
+      <Select
+        class="full"
+        label="Cartella"
+        value={s.folder_id ?? ''}
+        options={[{ value: '', label: 'Nessuna' }, ...app.folders.map((f) => ({ value: f.id, label: f.name }))]}
+        onchange={(v) => app.moveToFolder([s.id], v || null)}
+      />
     </fieldset>
 
     <dl class="info">
@@ -260,7 +262,7 @@
     font-size: var(--text-sm);
     font-weight: 400;
   }
-  select {
+  fieldset :global(.select.full) {
     width: 100%;
   }
   .info {

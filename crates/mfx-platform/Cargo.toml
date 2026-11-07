@@ -1,6 +1,6 @@
 [package]
 name = "mfx-platform"
-description = "MicFX: hotkey globali, SendInput, dispositivi, eventi Win32 (SPEC §8, §9)"
+description = "MicFX: hotkey globali, tasti simulati, dispositivi audio (SPEC §8, §9), Windows e macOS"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -30,3 +30,7 @@ windows = { workspace = true, features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 windows-core.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Solo per le binding CoreAudio (crate mfx-audio, modulo coreaudio): una sola copia delle dichiarazioni C.
+mfx-audio.workspace = true

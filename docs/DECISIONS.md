@@ -108,3 +108,42 @@ Scelte prese durante lo sviluppo, rispetto a [SPEC.md](SPEC.md). Le più recenti
   panic delle dipendenze il percorso `C:\Users\<nome>\.cargo\...`, lo script lo rimappa a `~` e verifica che
   il nome utente non resti nell'eseguibile. Gli aggiornamenti oggi sono manuali: il nuovo installer chiude MicFX,
   disinstalla la versione precedente (scelta predefinita) e installa la nuova; i dati non si toccano.
+
+## macOS (Apple Silicon)
+
+La SPEC metteva macOS fuori scope; dalla 1.1 MicFX gira anche su Mac con chip Apple. Stessa UI e stesso core,
+cambia solo il livello di sistema (`#[cfg(target_os = "macos")]`, file `*_mac.rs` accanto ai `*_win.rs`).
+
+- **Audio**: un'AUHAL di CoreAudio per bus (`mfx-audio/src/bus_mac.rs`), stesso ciclo di vita
+  Closed → Running → WarmIdle del bus WASAPI. La callback di render è il thread real-time del HAL: mixer e ring
+  appartengono alla callback mentre l'unità gira e al thread di controllo mentre è ferma (`gate`/`busy`
+  atomici, nessun lock). Formato chiesto all'unità float/48 kHz/stereo, CoreAudio converte verso il dispositivo.
+- Binding CoreAudio/AudioToolbox/Carbon/CoreGraphics **scritte a mano** (`mfx-audio/src/coreaudio/sys.rs`, poche
+  funzioni): niente bindgen né libclang in build, e il codice si verifica anche da Windows con
+  `cargo check --target aarch64-apple-darwin` (tranne `src-tauri`, che ha dipendenze Objective-C).
+- Risveglio: semaforo Mach con flag auto-reset (`event_mac.rs`), `set` chiamabile dalla callback audio.
+- **Cavo virtuale**: BlackHole 2ch (gratuito) o VB-Cable per Mac, riconosciuti dal nome. Su Mac lo stesso
+  dispositivo ha uscita e ingresso con un solo UID; gli ID dei dispositivi sono gli UID di CoreAudio.
+- **Voce**: macOS non ha "Ascolta questo dispositivo", quindi il modo è sempre `bridge` (anticipa la v1.1 della
+  SPEC). `mfx-audio/src/bridge.rs`: AUHAL di cattura sul microfono alla sua frequenza → stereo 48 kHz con
+  interpolazione lineare → ring `rtrb` → AUHAL di uscita sul cavo, indipendente dal bus dei suoni (il HAL somma le
+  due uscite). Latenza di lavoro 20 ms; oltre 80 ms si scarta l'eccesso (deriva dei clock), dopo un buco si
+  riparte a ring pieno. Il microfono si sceglie in Impostazioni → Audio → "La tua voce" (`mic.device_id`,
+  `null` = predefinito); l'engine risolve l'ID, così cambiare il predefinito sposta il bridge.
+  Il bridge resta acceso finché c'è un cavo: a riposo la CPU non è più zero su Mac (la voce deve passare sempre).
+- **Hotkey**: `RegisterEventHotKey` di Carbon, l'unica API globale che non chiede permessi. Va usata sul thread
+  principale: le richieste dell'engine ci arrivano con `dispatch_async_f` sulla coda principale, **mai sincrone**
+  (il thread principale può essere fermo in attesa dell'engine). Un rifiuto di Carbon torna all'engine dopo
+  (`hotkey_rejected`). Tasti per posizione con i key code `kVK_*`; tasti media, Pausa e Stamp non disponibili.
+- **⌘ al posto di Ctrl**: il modificatore `Win` del core su Mac è ⌘ (Command). Nella UI tutte le scorciatoie della
+  finestra usano ⌘ (`primaryMod`, `kb()` in `ui/src/lib/util/platform.ts`; su Mac Ctrl+clic è il clic destro) e le
+  combinazioni si mostrano con i simboli di macOS (⌃⌥⇧⌘). Eliminare: ⌘⌫ come nel Finder.
+- **PTT**: `CGEventPost` del key code; serve il permesso Accessibilità, chiesto da macOS al primo uso.
+- Dati in `~/Library/Application Support/MicFX` e `.../MicFX Data`, fuori dal bundle `.app`.
+- **Distribuzione**: `.dmg` firmato ad-hoc, hardened runtime con l'entitlement del microfono
+  (`src-tauri/Entitlements.plist`), `NSMicrophoneUsageDescription` in `src-tauri/Info.plist`. Senza account Apple
+  Developer l'app non è notarizzata: al primo avvio "Apri comunque" da Privacy e sicurezza.
+- **Release**: `.github/workflows/release.yml` su un tag `vX.Y.Z` costruisce installer Windows e `.dmg` Mac e li
+  allega a una release in bozza con gli SHA-256. La CI gira su `windows-latest` e `macos-latest`.
+- Non ancora verificato su un Mac reale: audio, bridge, hotkey e PTT sono coperti solo da compilazione e test
+  automatici sul runner macOS.

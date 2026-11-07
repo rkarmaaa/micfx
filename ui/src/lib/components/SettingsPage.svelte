@@ -23,6 +23,7 @@
   } from '../icons';
   import { app } from '../stores/app.svelte';
   import { formatAccelerator, singleKeyFromEvent } from '../util/keys';
+  import { CABLE_NAME, isMac, kb, OS_NAME } from '../util/platform';
   import HotkeyInput from './HotkeyInput.svelte';
   import Select from './Select.svelte';
   import Switch from './Switch.svelte';
@@ -194,14 +195,14 @@
             <div class="row">
               <div class="text">
                 <span class="t">Cuffie</span>
-                <span class="d">Quello che senti tu. Di solito il dispositivo predefinito di Windows.</span>
+                <span class="d">Quello che senti tu. Di solito il dispositivo predefinito di {OS_NAME}.</span>
               </div>
               <Select
                 class="ctl wide"
                 label="Cuffie"
                 value={s.outputs.monitor.device_id ?? ''}
                 options={[
-                  { value: '', label: 'Predefinito di Windows' },
+                  { value: '', label: `Predefinito di ${OS_NAME}` },
                   ...renderDevices.map((d) => ({ value: d.id, label: d.name + (d.is_default ? ' (predefinito)' : '') })),
                 ]}
                 onchange={(v) => app.setOutputDevice('monitor', v || null)}
@@ -210,21 +211,43 @@
             <div class="row">
               <div class="text">
                 <span class="t">Microfono virtuale</span>
-                <span class="d">Quello che sentono gli altri: l'ingresso di VB-Cable (CABLE Input).</span>
+                <span class="d"
+                  >{isMac
+                    ? 'Quello che sentono gli altri: BlackHole, che Discord usa come microfono.'
+                    : "Quello che sentono gli altri: l'ingresso di VB-Cable (CABLE Input)."}</span
+                >
               </div>
               <Select
                 class="ctl wide"
                 label="Microfono virtuale"
                 value={s.outputs.cable.device_id ?? ''}
-                options={[{ value: '', label: 'Rileva VB-Cable automaticamente' }, ...app.devices.map((d) => ({ value: d.id, label: d.name }))]}
+                options={[{ value: '', label: `Rileva ${CABLE_NAME} automaticamente` }, ...app.devices.map((d) => ({ value: d.id, label: d.name }))]}
                 onchange={(v) => app.setOutputDevice('cable', v || null)}
               />
             </div>
             {#if cableMissing}
               <div class="row callout">
                 <TriangleAlert size={16} />
-                <span class="grow">VB-Cable non è installato: i tuoi amici non sentono i suoni.</span>
+                <span class="grow">{CABLE_NAME} non è installato: i tuoi amici non sentono i suoni.</span>
                 <button type="button" class="sm" onclick={() => (app.guideOpen = true)}>Apri la guida</button>
+              </div>
+            {/if}
+            {#if isMac}
+              <div class="row">
+                <div class="text">
+                  <span class="t">La tua voce</span>
+                  <span class="d">Il microfono che MicFX manda dentro BlackHole insieme ai suoni, così su Discord ti sentono.</span>
+                </div>
+                <Select
+                  class="ctl wide"
+                  label="La tua voce"
+                  value={s.mic.device_id ?? ''}
+                  options={[
+                    { value: '', label: 'Microfono predefinito di macOS' },
+                    ...app.mics.map((m) => ({ value: m.id, label: m.name + (m.is_default ? ' (predefinito)' : '') })),
+                  ]}
+                  onchange={(v) => app.updateSettings({ mic: { device_id: v || null } })}
+                />
               </div>
             {/if}
             <div class="row">
@@ -241,8 +264,8 @@
         <section id="set-hotkeys" aria-labelledby="h-hotkeys">
           <h2 id="h-hotkeys">Scorciatoie globali</h2>
           <p class="lead">
-            Funzionano ovunque, anche con MicFX nella tray e nei giochi a schermo intero. Quelle dei singoli suoni si impostano dal
-            suono, con <kbd>Ctrl</kbd> <kbd>Invio</kbd>.
+            Funzionano ovunque, anche con MicFX {isMac ? 'nella barra dei menu' : 'nella tray'} e nei giochi a schermo intero. Quelle dei singoli suoni si impostano dal
+            suono, con <kbd>{kb('Ctrl')}</kbd> <kbd>{kb('Invio')}</kbd>.
           </p>
           <div class="card">
             {#each GLOBAL as g (g.action.type)}
@@ -358,7 +381,11 @@
                 <output>{tail ?? s.ptt.tail_ms} ms</output>
               </div>
             </div>
-            <p class="foot">Discord non deve essere avviato come amministratore, altrimenti Windows blocca il tasto simulato.</p>
+            <p class="foot">
+              {isMac
+                ? 'Serve il permesso Accessibilità: Impostazioni di Sistema → Privacy e sicurezza → Accessibilità → MicFX.'
+                : 'Discord non deve essere avviato come amministratore, altrimenti Windows blocca il tasto simulato.'}
+            </p>
           </div>
         </section>
 
@@ -422,15 +449,17 @@
         <!-- ------------------------------------------------------------ Avvio -->
         <section id="set-startup" aria-labelledby="h-startup">
           <h2 id="h-startup">Avvio e finestra</h2>
-          <p class="lead">Chiudendo la finestra MicFX resta nella tray e le scorciatoie continuano a funzionare.</p>
+          <p class="lead">
+            Chiudendo la finestra MicFX resta {isMac ? 'nella barra dei menu' : 'nella tray'} e le scorciatoie continuano a funzionare.
+          </p>
           <div class="card">
             <div class="row">
               <div class="text">
-                <span class="t">Avvia con Windows</span>
-                <span class="d">Parte nascosto nella tray, pronto con le scorciatoie.</span>
+                <span class="t">{isMac ? "Avvia all'accesso" : 'Avvia con Windows'}</span>
+                <span class="d">Parte nascosto {isMac ? 'nella barra dei menu' : 'nella tray'}, pronto con le scorciatoie.</span>
               </div>
               <div class="ctl">
-                <Switch checked={s.startup.autostart} label="Avvia con Windows" onchange={(v) => app.updateSettings({ startup: { autostart: v } })} />
+                <Switch checked={s.startup.autostart} label={isMac ? "Avvia all'accesso" : 'Avvia con Windows'} onchange={(v) => app.updateSettings({ startup: { autostart: v } })} />
               </div>
             </div>
             <div class="row">

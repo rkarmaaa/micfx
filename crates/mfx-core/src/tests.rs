@@ -514,6 +514,8 @@ fn monitor_cannot_be_cable() {
     assert_eq!(e.code, ErrorCode::MonitorIsCable);
 }
 
+/// Solo Windows: su macOS il modo è sempre Bridge e "Ascolta questo dispositivo" non esiste.
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn mic_not_routed_status() {
     let h = Harness::new();

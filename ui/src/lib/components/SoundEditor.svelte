@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { kb } from '../util/platform';
   import type { PlayMode } from '../api';
   import { Headphones, Play, Square, Trash } from '../icons';
   import { app, soundEmoji } from '../stores/app.svelte';
@@ -57,7 +58,7 @@
 {#if s}
   <Modal title="Modifica suono" {onclose} side width={420}>
     <div class="head">
-      <button type="button" class="emoji-btn emoji-font" title="Cambia emoji (Ctrl+E)" aria-label="Cambia emoji" onclick={openEmoji}>
+      <button type="button" class="emoji-btn emoji-font" title={kb('Cambia emoji (Ctrl+E)')} aria-label="Cambia emoji" onclick={openEmoji}>
         {soundEmoji(s)}
       </button>
       <label class="name">

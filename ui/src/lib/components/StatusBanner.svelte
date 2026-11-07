@@ -1,5 +1,6 @@
 <script lang="ts">
   // Un avviso alla volta, il più importante. Si aggiorna da solo quando il problema sparisce.
+  import { CABLE_NAME, isMac } from '../util/platform';
   import type { ErrorCode } from '../api';
   import { api } from '../api';
   import { Info, TriangleAlert, X } from '../icons';
@@ -31,7 +32,7 @@
     </div>
     <div class="actions">
       {#if code === 'cable_missing'}
-        <button type="button" class="primary sm" onclick={() => api.openLink('vb-cable')}>Scarica VB-Cable</button>
+        <button type="button" class="primary sm" onclick={() => api.openLink(isMac ? 'blackhole' : 'vb-cable')}>Scarica {CABLE_NAME}</button>
         <button type="button" class="sm" onclick={() => (app.guideOpen = true)}>Guida</button>
       {:else if code === 'mic_not_routed'}
         <button type="button" class="primary sm" onclick={() => api.openSoundSettings(1)}>Apri impostazioni microfono</button>

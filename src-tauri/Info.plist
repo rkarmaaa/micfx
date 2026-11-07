@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Unito da Tauri all'Info.plist del bundle macOS. -->
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>MicFX manda la tua voce nel microfono virtuale, insieme ai suoni, così su Discord ti sentono.</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>it</string>
+</dict>
+</plist>

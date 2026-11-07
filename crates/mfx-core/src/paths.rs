@@ -3,6 +3,9 @@
 //! - `%APPDATA%\MicFX\config.json`: impostazioni.
 //! - `%LOCALAPPDATA%\MicFX Data\library\`: indice e audio; `logs\` accanto.
 //!
+//! - macOS: `~/Library/Application Support/MicFX` (config) e `~/Library/Application Support/MicFX Data`
+//!   (libreria, log). Il programma sta in `/Applications/MicFX.app`: aggiornare l'app non tocca i dati.
+//!
 //! Le cartelle dati sono separate da quella del programma (l'installer per utente usa
 //! `%LOCALAPPDATA%\MicFX`) e non hanno il nome dell'identificativo del bundle, che l'uninstaller
 //! cancella se l'utente spunta "elimina dati". Così libreria e impostazioni sopravvivono a
@@ -15,13 +18,21 @@ pub const LOCAL_DATA_DIR: &str = "MicFX Data";
 
 #[derive(Debug, Clone)]
 pub struct Paths {
-    /// `%APPDATA%\MicFX`
+    /// `%APPDATA%\MicFX` (macOS: `~/Library/Application Support/MicFX`)
     pub roaming: PathBuf,
-    /// `%LOCALAPPDATA%\MicFX Data`
+    /// `%LOCALAPPDATA%\MicFX Data` (macOS: `~/Library/Application Support/MicFX Data`)
     pub local: PathBuf,
 }
 
 impl Paths {
+    #[cfg(target_os = "macos")]
+    pub fn from_env() -> Self {
+        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
+        let base = home.join("Library").join("Application Support");
+        Self { roaming: base.join(APP_DIR), local: base.join(LOCAL_DATA_DIR) }
+    }
+
+    #[cfg(not(target_os = "macos"))]
     pub fn from_env() -> Self {
         let roaming = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
         let local_base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|| roaming.clone());

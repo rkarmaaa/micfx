@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { kb } from '../util/platform';
   import {
     Check,
     ChevronDown,
@@ -115,7 +116,7 @@
       ><Play /><span>Riproduci</span><kbd>Invio</kbd></button
     >
     <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => app.preview(one.id))}
-      ><Headphones /><span>Ascolta solo tu</span><kbd>Maiusc+Invio</kbd></button
+      ><Headphones /><span>Ascolta solo tu</span><kbd>{kb('Maiusc+Invio')}</kbd></button
     >
     {#if playing}
       <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => app.stop(one.id))}><Square /><span>Ferma</span></button>
@@ -131,10 +132,10 @@
       onclick={() => {
         const p = emojiAt();
         run(() => (app.emojiTarget = { soundId: one.id, ...p }));
-      }}><Smile /><span>Cambia emoji</span><kbd>Ctrl+E</kbd></button
+      }}><Smile /><span>Cambia emoji</span><kbd>{kb('Ctrl+E')}</kbd></button
     >
     <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => (app.editorId = one.id))}
-      ><SlidersHorizontal /><span>Scorciatoia, volume e modalità…</span><kbd>Ctrl+Invio</kbd></button
+      ><SlidersHorizontal /><span>Scorciatoia, volume e modalità…</span><kbd>{kb('Ctrl+Invio')}</kbd></button
     >
   {:else}
     <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => ids.forEach((id) => app.play(id)))}

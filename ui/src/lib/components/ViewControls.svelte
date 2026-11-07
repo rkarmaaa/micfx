@@ -1,5 +1,6 @@
 <script lang="ts">
   // Vista della libreria: griglia/elenco, dimensione dei riquadri, ordinamento.
+  import { kb } from '../util/platform';
   import { LayoutGrid, List } from '../icons';
   import { app, type SortMode, type TileSize, type ViewMode } from '../stores/app.svelte';
   import Select from './Select.svelte';
@@ -16,8 +17,8 @@
   ];
 
   const VIEWS: { v: ViewMode; label: string; icon: typeof LayoutGrid }[] = [
-    { v: 'grid', label: 'Griglia (Ctrl+1)', icon: LayoutGrid },
-    { v: 'list', label: 'Elenco (Ctrl+2)', icon: List },
+    { v: 'grid', label: kb('Griglia (Ctrl+1)'), icon: LayoutGrid },
+    { v: 'list', label: kb('Elenco (Ctrl+2)'), icon: List },
   ];
 </script>
 

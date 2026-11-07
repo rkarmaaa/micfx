@@ -4,6 +4,9 @@
 //! "è" su tastiera italiana resta lo stesso tasto fisico anche cambiando layout. Per lettere, cifre
 //! e punteggiatura il virtual key si ricava dallo scancode con il layout attivo al momento della
 //! registrazione; F-key, tastierino, navigazione e tasti media hanno VK fissi.
+//!
+//! Su macOS lo stesso nome si traduce nel key code di posizione (`kVK_*`), anche lui indipendente
+//! dal layout. Il modificatore `Win` è il tasto ⌘ (Command): su Mac fa da "Ctrl" delle scorciatoie.
 
 use std::fmt;
 
@@ -18,6 +21,12 @@ pub struct Mods {
 impl Mods {
     pub fn is_empty(&self) -> bool {
         !(self.ctrl || self.alt || self.shift || self.win)
+    }
+
+    /// Maschera dei modificatori Carbon di `RegisterEventHotKey` (`cmdKey`, `shiftKey`, `optionKey`,
+    /// `controlKey`). `win` = ⌘.
+    pub fn to_carbon(&self) -> u32 {
+        (self.win as u32) << 8 | (self.shift as u32) << 9 | (self.alt as u32) << 11 | (self.ctrl as u32) << 12
     }
 
     /// Flag `MOD_*` di `RegisterHotKey` (senza `MOD_NOREPEAT`).
@@ -38,6 +47,21 @@ pub struct Key {
 impl Key {
     pub fn is_extended(&self) -> bool {
         self.scancode & 0xFF00 == 0xE000
+    }
+
+    /// Key code di macOS (`kVK_*`, posizione fisica). `None` = il tasto non esiste sulle tastiere Mac
+    /// o non si può usare come hotkey (Pausa, Stamp, tasti media: macOS li tiene per sé).
+    pub fn mac_keycode(&self) -> Option<u16> {
+        MAC_KEYCODES.iter().find(|(n, _)| *n == self.name).map(|&(_, k)| k)
+    }
+
+    /// Tasto con questo scancode (il PTT in config è salvato come scancode).
+    pub fn by_scancode(scancode: u16) -> Option<Self> {
+        KEYS.iter().find(|(_, sc, _)| *sc == scancode).map(|&(name, scancode, fixed_vk)| Self {
+            name,
+            scancode,
+            fixed_vk,
+        })
     }
 
     /// Tasti che è sensato usare da soli, senza modificatori (SPEC §8.1).
@@ -191,6 +215,110 @@ const KEYS: &[(&str, u16, Option<u16>)] = &[
     ("MediaPlayPause", 0xE022, Some(0xB3)),
 ];
 
+// (nome, kVK_* di macOS). Fonte: HIToolbox/Events.h.
+const MAC_KEYCODES: &[(&str, u16)] = &[
+    ("A", 0x00),
+    ("S", 0x01),
+    ("D", 0x02),
+    ("F", 0x03),
+    ("H", 0x04),
+    ("G", 0x05),
+    ("Z", 0x06),
+    ("X", 0x07),
+    ("C", 0x08),
+    ("V", 0x09),
+    ("IntlBackslash", 0x0A),
+    ("B", 0x0B),
+    ("Q", 0x0C),
+    ("W", 0x0D),
+    ("E", 0x0E),
+    ("R", 0x0F),
+    ("Y", 0x10),
+    ("T", 0x11),
+    ("1", 0x12),
+    ("2", 0x13),
+    ("3", 0x14),
+    ("4", 0x15),
+    ("6", 0x16),
+    ("5", 0x17),
+    ("Equal", 0x18),
+    ("9", 0x19),
+    ("7", 0x1A),
+    ("Minus", 0x1B),
+    ("8", 0x1C),
+    ("0", 0x1D),
+    ("BracketRight", 0x1E),
+    ("O", 0x1F),
+    ("U", 0x20),
+    ("BracketLeft", 0x21),
+    ("I", 0x22),
+    ("P", 0x23),
+    ("Enter", 0x24),
+    ("L", 0x25),
+    ("J", 0x26),
+    ("Quote", 0x27),
+    ("K", 0x28),
+    ("Semicolon", 0x29),
+    ("Backslash", 0x2A),
+    ("Comma", 0x2B),
+    ("Slash", 0x2C),
+    ("N", 0x2D),
+    ("M", 0x2E),
+    ("Period", 0x2F),
+    ("Tab", 0x30),
+    ("Space", 0x31),
+    ("Backquote", 0x32),
+    ("Backspace", 0x33),
+    ("Escape", 0x35),
+    ("CapsLock", 0x39),
+    ("F17", 0x40),
+    ("NumpadDecimal", 0x41),
+    ("NumpadMultiply", 0x43),
+    ("NumpadAdd", 0x45),
+    ("NumpadDivide", 0x4B),
+    ("NumpadSubtract", 0x4E),
+    ("F18", 0x4F),
+    ("F19", 0x50),
+    ("Numpad0", 0x52),
+    ("Numpad1", 0x53),
+    ("Numpad2", 0x54),
+    ("Numpad3", 0x55),
+    ("Numpad4", 0x56),
+    ("Numpad5", 0x57),
+    ("Numpad6", 0x58),
+    ("Numpad7", 0x59),
+    ("F20", 0x5A),
+    ("Numpad8", 0x5B),
+    ("Numpad9", 0x5C),
+    ("F5", 0x60),
+    ("F6", 0x61),
+    ("F7", 0x62),
+    ("F3", 0x63),
+    ("F8", 0x64),
+    ("F9", 0x65),
+    ("F11", 0x67),
+    ("F13", 0x69),
+    ("F16", 0x6A),
+    ("F14", 0x6B),
+    ("F10", 0x6D),
+    ("F12", 0x6F),
+    ("F15", 0x71),
+    // Il tasto "Help" dei Mac sta dove sui PC c'è Ins.
+    ("Insert", 0x72),
+    ("Home", 0x73),
+    ("PageUp", 0x74),
+    ("Delete", 0x75),
+    ("F4", 0x76),
+    ("End", 0x77),
+    ("F2", 0x78),
+    ("PageDown", 0x79),
+    ("F1", 0x7A),
+    ("Left", 0x7B),
+    ("Right", 0x7C),
+    ("Down", 0x7D),
+    ("Up", 0x7E),
+];
+
 // Alias accettati in ingresso (stampati sempre col nome canonico).
 const ALIASES: &[(&str, &str)] = &[
     ("Esc", "Escape"),
@@ -318,6 +446,30 @@ mod tests {
         assert_eq!(m.to_win32(), 0x1 | 0x2 | 0x4 | 0x8);
         assert!(!Accelerator::parse("A").unwrap().key.ok_without_mods());
         assert!(Accelerator::parse("MediaPlayPause").unwrap().key.ok_without_mods());
+    }
+
+    #[test]
+    fn mac_keycodes_and_modifiers() {
+        let a = Accelerator::parse("Cmd+Shift+K").unwrap();
+        assert!(a.mods.win && a.mods.shift);
+        assert_eq!(a.key.mac_keycode(), Some(0x28));
+        assert_eq!(a.mods.to_carbon(), 0x100 | 0x200);
+        assert_eq!(Mods { ctrl: true, alt: true, ..Default::default() }.to_carbon(), 0x1000 | 0x800);
+        assert_eq!(Accelerator::parse("Numpad5").unwrap().key.mac_keycode(), Some(0x57));
+        assert_eq!(Accelerator::parse("F13").unwrap().key.mac_keycode(), Some(0x69));
+        assert_eq!(Accelerator::parse("MediaPlayPause").unwrap().key.mac_keycode(), None);
+        // Ogni lettera, cifra e F1–F12 ha un key code, tutti distinti.
+        let mut seen = std::collections::HashSet::new();
+        for (name, _, _) in KEYS {
+            let k = key_by_name(name).unwrap();
+            if let Some(code) = k.mac_keycode() {
+                assert!(seen.insert(code), "key code doppio per {name}");
+            } else {
+                let fkey = name.strip_prefix('F').and_then(|n| n.parse::<u32>().ok()).is_some_and(|n| n <= 20);
+                assert!(name.len() > 1 && !fkey, "manca {name}");
+            }
+        }
+        assert_eq!(Key::by_scancode(0x1E).unwrap().name, "A");
     }
 
     #[test]

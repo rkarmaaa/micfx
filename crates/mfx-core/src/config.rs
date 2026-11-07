@@ -106,8 +106,11 @@ impl OutputSettings {
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum MicMode {
-    #[default]
+    /// Windows: la voce arriva al cavo con "Ascolta questo dispositivo", l'app non la tocca.
+    #[cfg_attr(not(target_os = "macos"), default)]
     System,
+    /// MicFX cattura il microfono e lo manda nel cavo. L'unico modo su macOS.
+    #[cfg_attr(target_os = "macos", default)]
     Bridge,
 }
 
@@ -116,6 +119,8 @@ pub enum MicMode {
 #[ts(export)]
 pub struct MicSettings {
     pub mode: MicMode,
+    /// Microfono da mandare nel cavo in modo Bridge. `None` = microfono predefinito del sistema.
+    pub device_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -258,6 +263,14 @@ impl Settings {
         }
         l.ceiling_dbtp = l.ceiling_dbtp.clamp(-12.0, 0.0);
         self.library.max_duration_s = self.library.max_duration_s.clamp(5, 3600);
+        if self.mic.device_id.as_deref().is_some_and(|s| s.trim().is_empty()) {
+            self.mic.device_id = None;
+        }
+        // Su macOS "Ascolta questo dispositivo" non esiste: la voce passa sempre dal bridge.
+        #[cfg(target_os = "macos")]
+        {
+            self.mic.mode = MicMode::Bridge;
+        }
         self.ptt.tail_ms = self.ptt.tail_ms.min(2000);
         self.ui.keepalive_s = self.ui.keepalive_s.min(300);
         if !self.ui.prefs.is_object() {

@@ -1,7 +1,9 @@
 <script lang="ts">
   // Configurazione una tantum (SPEC §14). I passi che il core sa verificare si spuntano da soli,
-  // in tempo reale, mentre l'utente cambia le impostazioni di Windows.
+  // in tempo reale, mentre l'utente cambia le impostazioni del sistema.
+  // Su Mac: BlackHole al posto di VB-Cable e la voce passa dal bridge di MicFX (niente "Ascolta").
   import { api } from '../api';
+  import { CABLE_NAME, isMac } from '../util/platform';
   import { Check, CircleHelp, ExternalLink, TriangleAlert } from '../icons';
   import { app } from '../stores/app.svelte';
   import Modal from './Modal.svelte';
@@ -14,6 +16,8 @@
   const rateOk = $derived(!app.status.includes('rate_mismatch'));
   const routedMic = $derived(app.mics.find((m) => m.routed_to_cable));
   const defaultMic = $derived(app.mics.find((m) => m.is_default));
+  const bridgeMic = $derived(app.mics.find((m) => m.id === app.settings?.mic.device_id) ?? defaultMic ?? app.mics[0]);
+  const cableName = $derived(app.devices.find((d) => d.is_cable)?.name ?? (isMac ? 'BlackHole 2ch' : 'CABLE Input'));
 
   function close() {
     if (!app.prefs.guideDone) app.setPrefs({ guideDone: true });
@@ -23,7 +27,7 @@
 
 <Modal title="Configura MicFX con Discord" onclose={close} width={620}>
   <p class="intro">
-    MicFX suona i file dentro un microfono virtuale (VB-Cable). Discord ascolta quel microfono, dove arrivano insieme la tua voce
+    MicFX suona i file dentro un microfono virtuale ({CABLE_NAME}). Discord ascolta quel microfono, dove arrivano insieme la tua voce
     e i suoni. Si fa una volta sola: i passi verificabili si spuntano da soli.
   </p>
 
@@ -31,9 +35,12 @@
     <li class:ok={cableOk}>
       <span class="check" aria-label={cableOk ? 'Fatto' : 'Da fare'}>{#if cableOk}<Check size={15} strokeWidth={3} />{:else}1{/if}</span>
       <div>
-        <strong>Installa VB-Cable</strong>
+        <strong>Installa {CABLE_NAME}</strong>
         {#if cableOk}
-          <p>Trovato: {app.devices.find((d) => d.is_cable)?.name ?? 'CABLE Input'}.</p>
+          <p>Trovato: {cableName}.</p>
+        {:else if isMac}
+          <p>Scarica <em>BlackHole 2ch</em> (gratuito), apri il pacchetto <code>.pkg</code> e segui l'installazione. Non serve riavviare.</p>
+          <button type="button" class="primary sm" onclick={() => api.openLink('blackhole')}><ExternalLink size={14} /> Apri existential.audio</button>
         {:else}
           <p>Scarica il pacchetto, estrailo, avvia <code>VBCABLE_Setup_x64.exe</code> come amministratore e riavvia il PC.</p>
           <button type="button" class="primary sm" onclick={() => api.openLink('vb-cable')}><ExternalLink size={14} /> Apri vb-audio.com</button>
@@ -44,8 +51,13 @@
     <li class:ok={micOk}>
       <span class="check" aria-label={micOk ? 'Fatto' : 'Da fare'}>{#if micOk}<Check size={15} strokeWidth={3} />{:else}2{/if}</span>
       <div>
-        <strong>Manda la tua voce dentro VB-Cable</strong>
-        {#if micOk}
+        <strong>Manda la tua voce dentro {CABLE_NAME}</strong>
+        {#if isMac}
+          <p>
+            Lo fa MicFX: la voce di {bridgeMic ? `«${bridgeMic.name}»` : 'il tuo microfono'} arriva a {cableName} insieme ai suoni.
+            La prima volta macOS chiede il permesso per il microfono: consenti. Il microfono si cambia in Impostazioni → Uscite.
+          </p>
+        {:else if micOk}
           <p>Il microfono «{routedMic?.name}» arriva a CABLE Input.</p>
         {:else}
           <p>
@@ -63,7 +75,10 @@
       <div>
         <strong>Le cuffie restano il dispositivo predefinito</strong>
         {#if defaultOk}
-          <p>Ok: CABLE Input non è il predefinito.</p>
+          <p>Ok: {isMac ? 'BlackHole' : 'CABLE Input'} non è il predefinito.</p>
+        {:else if isMac}
+          <p>Impostazioni di Sistema → Suono → <em>Uscita</em>: scegli le cuffie o gli altoparlanti, mai BlackHole.</p>
+          <button type="button" class="sm" onclick={() => api.openSoundSettings(0)}>Apri Impostazioni Suono</button>
         {:else}
           <p>Scheda <em>Riproduzione</em>: imposta le cuffie come predefinite, mai CABLE Input.</p>
           <button type="button" class="sm" onclick={() => api.openSoundSettings(0)}>Apri scheda Riproduzione</button>
@@ -77,7 +92,7 @@
         <strong>In Discord</strong>
         <p>Impostazioni → Voce e video:</p>
         <ul>
-          <li>Dispositivo di input: <em>CABLE Output (VB-Audio Virtual Cable)</em></li>
+          <li>Dispositivo di input: <em>{isMac ? 'BlackHole 2ch' : 'CABLE Output (VB-Audio Virtual Cable)'}</em></li>
           <li>
             Soppressione del rumore: <em>Nessuna</em> (Krisp taglia effetti e musica)
             {#if app.discord}{@render state(app.discord.krisp || app.discord.noise_suppression, 'ora attiva')}{/if}
@@ -106,8 +121,10 @@
         <strong>Facoltativo: tutto a 48 kHz</strong>
         <p>
           {rateOk
-            ? 'Cuffie e VB-Cable sono già a 48000 Hz.'
-            : 'Proprietà → Avanzate → 48000 Hz su cuffie, CABLE Input e CABLE Output. Funziona anche senza, con una conversione in più.'}
+            ? `Cuffie e ${CABLE_NAME} sono già a 48000 Hz.`
+            : isMac
+              ? 'Configurazione MIDI Audio → 48000 Hz su cuffie e BlackHole. Funziona anche senza, con una conversione in più.'
+              : 'Proprietà → Avanzate → 48000 Hz su cuffie, CABLE Input e CABLE Output. Funziona anche senza, con una conversione in più.'}
         </p>
       </div>
     </li>

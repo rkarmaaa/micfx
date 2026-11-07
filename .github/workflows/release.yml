@@ -1,0 +1,111 @@
+name: Release
+
+# Un tag `vX.Y.Z` costruisce l'installer per Windows e l'app per Mac (Apple Silicon) e li allega a una
+# release in bozza con lo stesso nome, insieme agli SHA-256. Le note si scrivono a mano prima di
+# pubblicare la bozza. Si può rilanciare a mano su un tag esistente: i file vengono sostituiti.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag da costruire (es. v1.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          # macos-latest è Apple Silicon (arm64).
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Versione del tag = versione dell'app
+        shell: bash
+        run: |
+          app=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "v$app" != "$TAG" ]; then
+            echo "Il tag $TAG non corrisponde alla versione $app di tauri.conf.json" >&2
+            exit 1
+          fi
+
+      - name: Installer Windows
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./tools/release/build.ps1 -OutDir release-files
+
+      - name: App macOS
+        if: matrix.platform == 'macos'
+        run: bash tools/release/build-macos.sh release-files
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: micfx-${{ matrix.platform }}
+          path: release-files/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-files
+          merge-multiple: true
+
+      - name: SHA-256
+        working-directory: release-files
+        run: sha256sum * | tee SHA256SUMS.txt
+
+      - name: Release in bozza
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release-files/* --clobber
+          else
+            {
+              echo "## Installazione"
+              echo
+              echo "**Windows**: scarica \`MicFX_${TAG#v}_x64-setup.exe\` e avvialo (serve [VB-Cable](https://vb-audio.com/Cable/))."
+              echo
+              echo "**Mac (Apple Silicon)**: scarica \`MicFX_${TAG#v}_aarch64.dmg\`, aprilo e trascina MicFX in Applicazioni (serve [BlackHole 2ch](https://existential.audio/blackhole/))."
+              echo "L'app non è notarizzata da Apple: al primo avvio apri Impostazioni di Sistema → Privacy e sicurezza → **Apri comunque**."
+              echo
+              echo "## SHA-256"
+              echo
+              echo '```'
+              cat release-files/SHA256SUMS.txt
+              echo '```'
+            } > notes.md
+            gh release create "$TAG" release-files/* --draft --title "MicFX ${TAG#v}" --notes-file notes.md
+          fi

@@ -26,25 +26,12 @@ use windows::core::{PCWSTR, w};
 
 use crate::event::{Event, Wait, wait_any};
 use crate::mixer::{Mixer, SoundRef};
+pub use crate::sink::BusTiming;
 use crate::sink::{BusCmd, BusEvent, BusShared, BusState, BusStats, DeviceId, OutputBus, Wake};
 use crate::{CHANNELS, SAMPLE_RATE};
 
 /// Durata del buffer WASAPI richiesta: 20 ms (il periodo resta quello di default, ~10 ms).
 const BUFFER_HNS: i64 = 200_000;
-
-#[derive(Debug, Clone, Copy)]
-pub struct BusTiming {
-    /// Silenzio dopo cui lo stream va in pausa calda.
-    pub idle_stop_ms: u32,
-    /// Pausa calda dopo cui il client viene rilasciato.
-    pub warm_hold_ms: u32,
-}
-
-impl Default for BusTiming {
-    fn default() -> Self {
-        Self { idle_stop_ms: 2000, warm_hold_ms: 60_000 }
-    }
-}
 
 pub struct WasapiBus {
     tx: Producer<BusCmd>,

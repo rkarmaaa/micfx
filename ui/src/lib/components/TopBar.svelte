@@ -1,5 +1,6 @@
 <script lang="ts">
   // Barra superiore (#202020): ricerca e azioni principali. Il nome dell'app è già nella barra del titolo di Windows.
+  import { kb } from '../util/platform';
   import { CircleHelp, Pause, Plus, Search, Settings, Square, X } from '../icons';
   import { app } from '../stores/app.svelte';
 
@@ -16,7 +17,7 @@
       bind:value={app.search}
       type="search"
       placeholder="Cerca suoni"
-      aria-label="Cerca suoni (Ctrl+F)"
+      aria-label={kb('Cerca suoni (Ctrl+F)')}
       spellcheck="false"
       onkeydown={(e) => {
         if (e.key === 'Escape' && app.search) {
@@ -48,7 +49,7 @@
         }}><X size={14} /></button
       >
     {:else}
-      <kbd class="hint" aria-hidden="true">Ctrl F</kbd>
+      <kbd class="hint" aria-hidden="true">{kb('Ctrl F')}</kbd>
     {/if}
   </div>
 
@@ -73,7 +74,7 @@
     <span class="label">Ferma tutto</span>
     {#if playingCount > 1}<span class="count">{playingCount}</span>{/if}
   </button>
-  <button type="button" class="primary add" title="Importa file audio (Ctrl+O)" onclick={() => app.pickAndImport()}>
+  <button type="button" class="primary add" title={kb('Importa file audio (Ctrl+O)')} onclick={() => app.pickAndImport()}>
     <Plus size={16} strokeWidth={2.4} /><span class="label">Aggiungi suoni</span>
   </button>
 
@@ -82,7 +83,7 @@
   <button type="button" class="tool" title="Guida configurazione Discord" aria-label="Guida configurazione" onclick={() => (app.guideOpen = true)}>
     <CircleHelp size={18} />
   </button>
-  <button type="button" class="tool" title="Impostazioni (Ctrl+,)" aria-label="Impostazioni" onclick={() => app.openSettings()}>
+  <button type="button" class="tool" title={kb('Impostazioni (Ctrl+,)')} aria-label="Impostazioni" onclick={() => app.openSettings()}>
     <Settings size={18} />
   </button>
 </header>

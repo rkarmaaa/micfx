@@ -1,5 +1,5 @@
 //! Guscio Tauri di MicFX (docs/SPEC.md §10): tray, finestra effimera, IPC.
-//! Tutta la logica sta in `mfx-core`; qui solo il collegamento con Windows e la WebView.
+//! Tutta la logica sta in `mfx-core`; qui solo il collegamento con il sistema e la WebView.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -117,6 +117,9 @@ fn main() {
         .expect("avvio di MicFX fallito");
 
     app.run(|app, event| match event {
+        // macOS: clic sull'icona nel Dock con la finestra chiusa.
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { .. } => window::show(app),
         // Chiudere l'ultima finestra non chiude l'app: resta nella tray (F12). Solo "Esci" passa un codice.
         RunEvent::ExitRequested { api, code, .. } if code.is_none() => api.prevent_exit(),
         RunEvent::Exit => {

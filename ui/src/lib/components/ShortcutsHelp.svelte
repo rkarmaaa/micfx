@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isMac, kb } from '../util/platform';
   import Modal from './Modal.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
@@ -14,7 +15,7 @@
     ['F2', 'Rinomina'],
     ['Ctrl + E', 'Cambia emoji'],
     ['Ctrl + Invio', 'Modifica: scorciatoia, volume, modalità'],
-    ['Canc', 'Elimina (con Annulla)'],
+    [isMac ? '⌘ + ⌫' : 'Canc', 'Elimina (con Annulla)'],
     ['Clic destro / Maiusc + F10', 'Altre azioni'],
     ['Trascina', 'Riordina o sposta in una cartella'],
     ['Ctrl + F o scrivi', 'Cerca'],
@@ -32,7 +33,7 @@
   <table>
     <tbody>
       {#each rows as [k, v]}
-        <tr><td><kbd>{k}</kbd></td><td>{v}</td></tr>
+        <tr><td><kbd>{kb(k)}</kbd></td><td>{v}</td></tr>
       {/each}
     </tbody>
   </table>

@@ -10,6 +10,7 @@ discostano sono in [docs/DECISIONS.md](docs/DECISIONS.md). Leggile prima di camb
 npm install                 # una volta
 npm run dev                 # app in sviluppo (Vite + tauri dev)
 npm run build               # installer NSIS in target/release/bundle/nsis
+powershell -File tools/release/build.ps1   # installer da pubblicare: senza percorsi utente, con SHA-256
 cargo test --workspace      # test Rust; rigenera anche i tipi TS in ui/src/lib/api/types
 cargo clippy --workspace --all-targets -- -D warnings
 npm run check               # svelte-check della UI
@@ -19,6 +20,10 @@ npm run emoji               # rigenera ui/src/lib/emoji/data.json da emojibase-d
 Debug della WebView reale: avvia con `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333`
 e collega un client CDP; in sviluppo lo store è su `window.__app`.
 
+Test visivi senza core: `npm run dev:ui` e apri `http://localhost:5173/mock.html` (core simulato in memoria da
+`ui/src/dev-mock.ts`; parametri `?status=cable_missing,mic_not_routed`, `?n=200`, `?view=list`, `?paused`).
+Non tocca l'istanza di MicFX installata.
+
 ## Struttura
 
 - `crates/mfx-library`: import (symphonia → rubato → trim → EBU R128 → i16 TPDF), formato `.sbpcm`, `index.json`, scrittura atomica.
@@ -26,7 +31,8 @@ e collega un client CDP; in sviluppo lo store è su `window.__app`.
 - `crates/mfx-platform`: hotkey (`RegisterHotKey`), parser accelerator, `SendInput` (PTT), dispositivi e notifiche.
 - `crates/mfx-core`: thread engine, config, contratto IPC (`api.rs`, esportato con ts-rs), test end-to-end su piattaforma finta.
 - `src-tauri`: guscio sottile: tray, finestra effimera, comandi IPC.
-- `ui`: Svelte 5. UI volutamente spoglia: il design arriverà dal Figma. La UX (flussi, tastiera, stati, errori) è completa.
+- `ui`: Svelte 5. Design system in `ui/src/styles`: `_tokens.scss` (colori, raggi, ombre, tipografia) e
+  `global.scss` (pulsanti, campi, cursori, menu). I componenti aggiungono solo il layout.
 
 Dipendenze a senso unico: `src-tauri → mfx-core → mfx-audio, mfx-library, mfx-platform`.
 
@@ -54,9 +60,19 @@ programma (`%LOCALAPPDATA%\MicFX`, scelta dall'installer per utente): l'uninstal
 impostazioni sopravvivono ad aggiornamenti e reinstallazioni. Non cambiare questi percorsi senza una migrazione
 (vedi `Paths::migrate_library_from`).
 
+## Design
+
+- Un solo tema, **scuro e non modificabile**: niente `prefers-color-scheme`, niente varianti chiare.
+- Barra superiore `#202020`, primario `#4F46E5` (il colore del logo); sul testo d'accento `--primary-text`.
+- Icone **solo Lucide** (`@lucide/svelte`): si aggiungono in `ui/src/lib/icons.ts` col nome canonico. Le emoji
+  dei suoni sono contenuto, non icone.
+- Font **Schibsted Grotesk** (`@fontsource-variable`, locale: la CSP non ammette font esterni).
+- Mai colori, raggi o ombre scritti a mano nei componenti: solo i token.
+
 ## Convenzioni
 
 - Testi e commenti in italiano. Codici d'errore stabili in `ErrorCode`; i testi per l'utente li decide la UI (`ui/src/lib/util/messages.ts`).
 - Ogni cambio al contratto IPC passa da `crates/mfx-core/src/api.rs` + `cargo test` per rigenerare i tipi TS.
 - Gli eventi del core arrivano con le chiavi JSON in ordine alfabetico: nella UI non confrontare oggetti con `JSON.stringify`.
 - Svelte 5: un figlio può rileggere le props mentre il suo `{#if}` si chiude; passa props null-safe (`x?.y ?? default`).
+- Il repository è pubblico: commit con l'email noreply di GitHub (impostata nella config locale), nessun dato personale.

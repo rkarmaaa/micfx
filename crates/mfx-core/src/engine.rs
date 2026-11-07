@@ -1423,7 +1423,12 @@ impl Engine {
             return Err(ApiError::new(ErrorCode::InvalidArgument, "Il nome della cartella non può essere vuoto."));
         }
         let name: String = name.chars().take(40).collect();
-        let folder = match id.and_then(|id| self.index.folders.iter_mut().find(|f| f.id == id)) {
+        // Due schede con lo stesso nome non si distinguono: il nome è unico, senza badare alle maiuscole.
+        let key = name.to_lowercase();
+        if self.index.folders.iter().any(|f| Some(f.id.as_str()) != id.as_deref() && f.name.to_lowercase() == key) {
+            return Err(ApiError::new(ErrorCode::FolderExists, format!("Esiste già una cartella «{name}».")));
+        }
+        let folder = match self.index.folders.iter_mut().find(|f| Some(f.id.as_str()) == id.as_deref()) {
             Some(f) => {
                 f.name = name;
                 if let Some(o) = order {
@@ -1432,8 +1437,15 @@ impl Engine {
                 f.clone()
             }
             None => {
+                // Un ID sconosciuto ricrea la cartella con quell'ID: è l'"Annulla" di un'eliminazione,
+                // così preferenze e import in corso che la nominano tornano validi.
+                let id = match id {
+                    Some(id) if valid_folder_id(&id) => id,
+                    Some(_) => return Err(ApiError::new(ErrorCode::InvalidArgument, "ID della cartella non valido.")),
+                    None => uuid::Uuid::new_v4().simple().to_string(),
+                };
                 let order = order.unwrap_or_else(|| self.index.folders.iter().map(|f| f.order + 1).max().unwrap_or(0));
-                let f = Folder { id: uuid::Uuid::new_v4().simple().to_string(), name, order };
+                let f = Folder { id, name, order };
                 self.index.folders.push(f.clone());
                 f
             }
@@ -1690,6 +1702,11 @@ fn playing_of(play_id: u64, p: &PlayState) -> Playing {
 
 fn not_found(id: &str) -> ApiError {
     ApiError::new(ErrorCode::SoundNotFound, format!("Suono non trovato: {id}"))
+}
+
+/// ID accettati per ricreare una cartella: quelli generati dal core (UUID semplice) e simili.
+fn valid_folder_id(id: &str) -> bool {
+    (1..=64).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
 fn internal(e: impl std::fmt::Display) -> ApiError {

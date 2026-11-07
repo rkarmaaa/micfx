@@ -176,6 +176,7 @@ pub fn open_link(which: String) -> ApiResult<()> {
         "discord-voice" => "https://support.discord.com/hc/it/articles/360045138471",
         // Protocollo registrato dal client: apre Discord (sulle impostazioni voce, se le riconosce).
         "discord-app" => "discord://-/settings/voice",
+        "github" => "https://github.com/rkarmaaa/micfx",
         _ => return Err(ApiError::new(ErrorCode::InvalidArgument, "Collegamento sconosciuto.")),
     };
     std::process::Command::new("rundll32.exe")

@@ -1,7 +1,7 @@
 <script lang="ts">
   // Griglia o elenco dei suoni. Clic = suona. Ctrl/Maiusc+clic = seleziona. Trascina = riordina
   // o sposta in una cartella. Frecce, Invio, F2, Canc come in Esplora risorse.
-  import { app } from '../stores/app.svelte';
+  import { app, soundEmoji } from '../stores/app.svelte';
   import { isTypingTarget } from '../util/keys';
   import SoundItem from './SoundItem.svelte';
 
@@ -77,8 +77,7 @@
     if (app.renamingId === id) return;
     if (e.ctrlKey || e.metaKey) return app.select(id, 'toggle');
     if (e.shiftKey) return app.select(id, 'range');
-    app.select(id, 'single');
-    app.play(id);
+    app.playFromClick(id);
   }
 
   function oncontextmenu(e: MouseEvent) {
@@ -166,7 +165,7 @@
     if (!id || (e.target as HTMLElement).closest('[data-action], input')) return;
     drag = {
       id,
-      ids: app.selection.has(id) ? [...app.selection] : [id],
+      ids: app.selection.has(id) ? app.targets(id) : [id],
       startX: e.clientX,
       startY: e.clientY,
       pointerId: e.pointerId,
@@ -192,9 +191,11 @@
     if (folderEl) {
       drag.folder = folderEl.dataset.folderDrop === 'all' ? null : folderEl.dataset.folderDrop!;
       drag.target = null;
+      app.soundDropFolder = folderEl.dataset.folderDrop!;
       return;
     }
     drag.folder = undefined;
+    app.soundDropFolder = null;
     const item = under?.closest<HTMLElement>('[data-sound-id]');
     if (!item || drag.ids.includes(item.dataset.soundId!) || drag.ids.length > 1) {
       drag.target = null;
@@ -209,6 +210,7 @@
     if (!drag || e.pointerId !== drag.pointerId) return;
     const d = drag;
     drag = null;
+    app.soundDropFolder = null;
     if (!d.active) return;
     suppressClick = true;
     setTimeout(() => (suppressClick = false), 0);
@@ -229,6 +231,7 @@
     if (drag?.active && e.key === 'Escape') {
       e.stopPropagation();
       drag = null;
+      app.soundDropFolder = null;
       suppressClick = true;
     }
   }
@@ -241,7 +244,7 @@
 <div
   bind:this={container}
   class="collection {view}"
-  style:--tile={app.prefs.size === 's' ? '100px' : app.prefs.size === 'l' ? '168px' : '128px'}
+  style:--tile={app.prefs.size === 's' ? '104px' : app.prefs.size === 'l' ? '172px' : '136px'}
   role="listbox"
   aria-label="Suoni"
   aria-multiselectable="true"
@@ -252,7 +255,7 @@
   {onpointerdown}
   {onpointermove}
   {onpointerup}
-  onpointercancel={() => (drag = null)}
+  onpointercancel={() => ((drag = null), (app.soundDropFolder = null))}
   onfocus={(e) => {
     if (e.target === container && list.length && !app.focusId) app.focusId = list[0].id;
   }}
@@ -286,9 +289,10 @@
 
 {#if draggedSound && drag}
   <div class="ghost" style:left="{drag.x + 12}px" style:top="{drag.y + 12}px" aria-hidden="true">
-    {drag.ids.length > 1 ? `${drag.ids.length} suoni` : draggedSound.name}
+    <span class="emoji-font">{soundEmoji(draggedSound)}</span>
+    <span>{drag.ids.length > 1 ? `${drag.ids.length} suoni` : draggedSound.name}</span>
     {#if drag.folder !== undefined}
-      → {drag.folder === null ? 'Tutti' : app.folders.find((f) => f.id === drag!.folder)?.name}
+      <span class="to">→ {drag.folder === null ? 'Tutti' : app.folders.find((f) => f.id === drag!.folder)?.name}</span>
     {/if}
   </div>
 {/if}
@@ -297,31 +301,38 @@
   .collection {
     flex: 1;
     overflow: auto;
-    padding: 12px;
+    padding: 6px 16px 16px;
     outline: none;
     align-content: start;
   }
   .collection.grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, var(--tile));
-    gap: 10px;
-    justify-content: start;
+    grid-template-columns: repeat(auto-fill, minmax(var(--tile), 1fr));
+    gap: 12px;
   }
   .collection.list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
+    padding-inline: 12px;
   }
   .ghost {
     position: fixed;
     z-index: 90;
-    pointer-events: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 6px 10px;
+    border: 1px solid var(--primary);
+    border-radius: var(--r-md);
     background: var(--surface);
-    border: 1px solid var(--accent);
-    border-radius: 6px;
-    padding: 4px 8px;
-    font-size: 13px;
-    box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+    box-shadow: var(--shadow-lg);
+    font-size: var(--text-md);
+    font-weight: 550;
     white-space: nowrap;
+    pointer-events: none;
+  }
+  .ghost .to {
+    color: var(--primary-text);
   }
 </style>

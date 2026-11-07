@@ -1,3 +1,4 @@
+import '@fontsource-variable/schibsted-grotesk';
 import { mount } from 'svelte';
 
 import App from './App.svelte';

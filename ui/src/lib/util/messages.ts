@@ -47,6 +47,8 @@ export const ERROR_TEXT: Partial<Record<ErrorCode, string>> = {
   import_not_found: 'File non trovato.',
   disk_full: 'Spazio su disco esaurito.',
   sound_not_found: 'Suono non trovato.',
+  folder_not_found: 'Cartella non trovata.',
+  folder_exists: 'Esiste già una cartella con questo nome.',
   outputs_disabled: 'Microfono e cuffie sono disattivati.',
   device_lost: 'Dispositivo audio non disponibile.',
   ptt_send_failed: 'Push-to-talk bloccato da Windows.',

@@ -24,10 +24,14 @@ pub fn show(app: &AppHandle) {
 fn create(app: &AppHandle) -> tauri::Result<()> {
     let core = app.state::<CoreHandle>().inner().clone();
     let saved = core.get_settings().ok().and_then(|s| s.ui.window);
+    // Un solo tema, scuro: barra del titolo scura anche con Windows in tema chiaro, e sfondo già
+    // scuro (#161616, come --bg) così l'apertura non lampeggia di bianco prima del primo frame.
     let mut b = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::App("index.html".into()))
         .title("MicFX")
         .inner_size(980.0, 680.0)
         .min_inner_size(560.0, 420.0)
+        .theme(Some(tauri::Theme::Dark))
+        .background_color(tauri::window::Color(0x16, 0x16, 0x16, 0xff))
         .focused(true);
     match saved.filter(|r| on_screen(app, r)) {
         Some(r) => b = b.position(r.x as f64, r.y as f64).inner_size(r.w as f64, r.h as f64),

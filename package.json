@@ -1,7 +1,7 @@
 {
   "name": "micfx",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
@@ -14,6 +14,8 @@
     "types": "cargo test --workspace --lib export_bindings"
   },
   "dependencies": {
+    "@fontsource-variable/schibsted-grotesk": "5.3.0",
+    "@lucide/svelte": "1.70.0",
     "@tauri-apps/api": "2.12.4"
   },
   "devDependencies": {

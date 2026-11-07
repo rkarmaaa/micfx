@@ -45,16 +45,22 @@
     border-collapse: collapse;
   }
   td {
-    padding: 4px 6px;
+    padding: 8px 0;
     border-bottom: 1px solid var(--border);
-    font-size: 13px;
+    color: var(--fg-2);
+    font-size: var(--text-md);
+  }
+  tr:last-child td {
+    border-bottom: none;
   }
   td:first-child {
-    white-space: nowrap;
     width: 1%;
+    padding-right: 20px;
+    white-space: nowrap;
   }
   .help {
-    font-size: 12px;
+    margin-top: 12px;
     color: var(--fg-muted);
+    font-size: var(--text-sm);
   }
 </style>

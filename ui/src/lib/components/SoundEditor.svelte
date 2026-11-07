@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PlayMode } from '../api';
+  import { Headphones, Play, Square, Trash } from '../icons';
   import { app, soundEmoji } from '../stores/app.svelte';
   import { formatDuration } from '../util/volume';
   import HotkeyInput from './HotkeyInput.svelte';
@@ -76,10 +77,10 @@
     </div>
 
     <div class="row">
-      <button type="button" onclick={() => app.play(s.id)}>▶ Riproduci</button>
-      <button type="button" onclick={() => app.preview(s.id)} title="Solo in cuffia, Discord non lo sente">🎧 Ascolta solo tu</button>
+      <button type="button" class="primary" onclick={() => app.play(s.id)}><Play size={15} fill="currentColor" /> Riproduci</button>
+      <button type="button" onclick={() => app.preview(s.id)} title="Solo in cuffia, Discord non lo sente"><Headphones size={15} /> Ascolta solo tu</button>
       {#if app.playingBySound.has(s.id)}
-        <button type="button" onclick={() => app.stop(s.id)}>■ Ferma</button>
+        <button type="button" class="danger" onclick={() => app.stop(s.id)}><Square size={13} fill="currentColor" /> Ferma</button>
       {/if}
     </div>
 
@@ -100,6 +101,7 @@
           step="0.5"
           value={gain}
           aria-label="Guadagno del suono"
+          style:--fill="{((gain + 30) / 42) * 100}%"
           oninput={(e) => setGain(+e.currentTarget.value)}
           ondblclick={() => setGain(0)}
         />
@@ -139,7 +141,7 @@
       <dd>{s.loudness_gain_db > 0 ? '+' : ''}{s.loudness_gain_db.toFixed(1)} dB automatici</dd>
       {#if s.source.path}
         <dt>File originale</dt>
-        <dd class="path" title={s.source.path}>{s.source.path}</dd>
+        <dd class="path selectable" title={s.source.path}>{s.source.path}</dd>
       {/if}
       <dt>Aggiunto</dt>
       <dd>{new Date(s.created_at).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' })}</dd>
@@ -148,9 +150,9 @@
     </dl>
 
     {#snippet footer()}
-      <button type="button" class="danger" onclick={() => (onclose(), app.deleteSounds([s.id]))}>Elimina</button>
+      <button type="button" class="danger ghost" onclick={() => (onclose(), app.deleteSounds([s.id]))}><Trash size={15} /> Elimina</button>
       <span style="flex:1"></span>
-      <button type="button" onclick={onclose}>Fatto</button>
+      <button type="button" class="primary" onclick={onclose}>Fatto</button>
     {/snippet}
   </Modal>
 {/if}
@@ -158,46 +160,69 @@
 <style>
   .head {
     display: flex;
-    gap: 12px;
+    gap: 14px;
     align-items: flex-end;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
   }
   .emoji-btn {
-    font-size: 40px;
-    width: 64px;
-    height: 64px;
+    width: 68px;
+    height: 68px;
     padding: 0;
+    border-radius: var(--r-xl);
+    background: var(--surface-2);
+    font-size: 40px;
+    flex: none;
+  }
+  .emoji-btn:hover:not(:disabled) {
+    background: var(--surface-3);
   }
   .name {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+  }
+  .name span {
+    color: var(--fg-muted);
+    font-size: var(--text-sm);
+    font-weight: 550;
   }
   .row {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     flex-wrap: wrap;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
   fieldset {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    margin: 10px 0;
-    padding: 8px 10px 10px;
+    margin: 0;
+    padding: 16px 0 0;
+    border: none;
+    border-top: 1px solid var(--border);
+  }
+  fieldset + fieldset,
+  .row + fieldset {
+    margin-top: 16px;
   }
   legend {
+    float: left;
+    width: 100%;
+    margin-bottom: 4px;
+    padding: 0;
+    font-size: var(--text-md);
     font-weight: 600;
-    padding: 0 4px;
   }
   .help {
-    margin: 0 0 6px;
-    font-size: 12px;
+    clear: both;
+    margin: 0 0 10px;
     color: var(--fg-muted);
+    font-size: var(--text-sm);
+  }
+  legend + :not(.help) {
+    clear: both;
   }
   .gain {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     align-items: center;
   }
   .gain input {
@@ -205,34 +230,62 @@
   }
   .gain output {
     width: 64px;
+    color: var(--fg-2);
+    font-weight: 550;
     text-align: right;
-    font-variant-numeric: tabular-nums;
   }
   .radio {
+    display: grid;
+    grid-template-columns: 16px 1fr;
+    gap: 10px;
+    align-items: start;
+    padding: 8px 10px;
+    margin: 0 -10px;
+    border-radius: var(--r-md);
+    cursor: default;
+  }
+  .radio:hover {
+    background: var(--surface-2);
+  }
+  .radio input {
+    margin-top: 2px;
+  }
+  .radio span {
     display: flex;
-    gap: 6px;
-    align-items: baseline;
-    padding: 3px 0;
+    flex-direction: column;
+    font-weight: 550;
   }
   .radio small {
     color: var(--fg-muted);
+    font-size: var(--text-sm);
+    font-weight: 400;
+  }
+  select {
+    width: 100%;
   }
   .info {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 4px 12px;
-    font-size: 12px;
+    gap: 6px 16px;
+    margin: 20px 0 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--bg);
     color: var(--fg-muted);
+    font-size: var(--text-sm);
+  }
+  .info dt {
+    color: var(--fg-faint);
   }
   .info dd {
     margin: 0;
+    min-width: 0;
+    color: var(--fg-2);
   }
   .path {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .danger {
-    color: var(--danger);
   }
 </style>

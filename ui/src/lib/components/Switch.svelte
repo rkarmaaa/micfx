@@ -23,32 +23,44 @@
 <style>
   .switch {
     position: relative;
-    width: 36px;
-    height: 20px;
-    border-radius: 10px;
-    border: 1px solid var(--border-strong);
-    background: var(--surface-2);
-    padding: 0;
     flex: none;
-    cursor: pointer;
+    width: 36px;
+    min-width: 36px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--switch-off);
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.04);
+    cursor: default;
+    transition: background var(--t-med) var(--ease);
   }
-  .switch[aria-checked='true'] {
-    background: var(--accent);
-    border-color: var(--accent);
+  .switch:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--switch-off) 80%, var(--fg));
+    border: none;
+  }
+  .switch[aria-checked='true'],
+  .switch[aria-checked='true']:hover:not(:disabled) {
+    background: var(--primary);
+  }
+  .switch[aria-checked='true']:hover:not(:disabled) {
+    background: var(--primary-hover);
   }
   .knob {
     position: absolute;
     top: 2px;
     left: 2px;
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
-    background: var(--fg);
-    transition: transform 0.12s;
+    background: var(--knob);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.25),
+      0 0 0 0.5px rgb(0 0 0 / 0.06);
+    transition: transform var(--t-med) var(--ease);
   }
   .switch[aria-checked='true'] .knob {
     transform: translateX(16px);
-    background: var(--accent-fg);
   }
   .switch:disabled {
     opacity: 0.4;

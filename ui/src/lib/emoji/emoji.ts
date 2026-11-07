@@ -1,5 +1,6 @@
-// Emoji: dati caricati solo quando servono, ricerca in italiano e inglese, varianti di carnagione,
-// suggerimento dal nome del suono e verifica di cosa il font di Windows sa disegnare davvero.
+// Emoji: dati precaricati quando la finestra è inattiva (non all'avvio), ricerca in italiano e
+// inglese, varianti di carnagione, suggerimento dal nome del suono e verifica (in cache) di cosa il
+// font di Windows sa disegnare davvero.
 
 export type EmojiEntry = {
   /** Carattere (con selettore di variante dove serve). */
@@ -24,20 +25,9 @@ export type EmojiData = {
   groups: EmojiGroup[];
   emojis: EmojiEntry[];
   byChar: Map<string, EmojiEntry>;
+  byGroup: Map<number, EmojiEntry[]>;
   /** Emoji nascoste perché troppo recenti per il font di Windows installato. */
   hidden: number;
-};
-
-export const GROUP_ICONS: Record<string, string> = {
-  'smileys-emotion': '😀',
-  'people-body': '👋',
-  'animals-nature': '🐻',
-  'food-drink': '🍕',
-  'travel-places': '✈️',
-  activities: '⚽',
-  objects: '💡',
-  symbols: '❤️',
-  flags: '🏁',
 };
 
 export const SKIN_TONES = ['', '🏻', '🏼', '🏽', '🏾', '🏿'];
@@ -76,18 +66,79 @@ export function loadEmoji(): Promise<EmojiData> {
   loading ??= (async () => {
     const [mod] = await Promise.all([import('./data.json'), ensureFlagFont()]);
     const raw = mod.default as { groups: EmojiGroup[]; emojis: EmojiEntry[] };
-    const ok = makeSupportTester();
-    const emojis = raw.emojis.filter((e) => e.v < 12 || ok(e.e));
+    const hidden = await unsupportedEmojis(raw.emojis);
+    const emojis = hidden.size ? raw.emojis.filter((e) => !hidden.has(e.e)) : raw.emojis;
+    const byGroup = new Map<number, EmojiEntry[]>();
+    for (const e of emojis) {
+      let l = byGroup.get(e.g);
+      if (!l) byGroup.set(e.g, (l = []));
+      l.push(e);
+    }
     const data: EmojiData = {
-      groups: raw.groups.filter((g) => emojis.some((e) => e.g === g.id)),
+      groups: raw.groups.filter((g) => byGroup.has(g.id)),
       emojis,
       byChar: new Map(emojis.map((e) => [e.e, e])),
+      byGroup,
       hidden: raw.emojis.length - emojis.length,
     };
     loaded = data;
     return data;
   })();
+  loading.catch(() => (loading = null));
   return loading;
+}
+
+/** Carica le emoji quando il browser è inattivo, così il selettore si apre già pronto. */
+export function preloadEmoji() {
+  if (loading) return;
+  const go = () => void loadEmoji().catch(() => undefined);
+  if ('requestIdleCallback' in window) requestIdleCallback(go, { timeout: 4000 });
+  else setTimeout(go, 1500);
+}
+
+// Il test su canvas costa ~1 s a freddo: il risultato resta in memoria tra un'apertura e l'altra
+// della finestra. Si rifà se cambia il motore (WebView2 aggiornata) o dopo 30 giorni (font di
+// Windows aggiornato con emoji nuove).
+const SUPPORT_KEY = 'micfx.emoji.unsupported.v1';
+const SUPPORT_TTL = 30 * 24 * 3600 * 1000;
+
+/** Cede il thread alla UI senza il ritardo minimo di setTimeout (4 ms, molto di più se nascosta). */
+function yieldToUi(): Promise<void> {
+  const s = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (s?.yield) return s.yield();
+  return new Promise((r) => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => r();
+    ch.port2.postMessage(null);
+  });
+}
+
+async function unsupportedEmojis(all: EmojiEntry[]): Promise<Set<string>> {
+  try {
+    const c = JSON.parse(localStorage.getItem(SUPPORT_KEY) ?? 'null') as { ua: string; n: number; at: number; hidden: string[] } | null;
+    if (c && c.ua === navigator.userAgent && c.n === all.length && Date.now() - c.at < SUPPORT_TTL) return new Set(c.hidden);
+  } catch {
+    /* cache illeggibile: si rifà il test */
+  }
+  // Solo le emoji recenti (Emoji 12+) possono mancare nel font di Windows 10/11.
+  const ok = makeSupportTester();
+  const hidden: string[] = [];
+  let slice = performance.now();
+  for (const e of all) {
+    if (e.v < 12) continue;
+    if (!ok(e.e)) hidden.push(e.e);
+    // A pezzi da ~12 ms: la finestra resta reattiva mentre il test gira.
+    if (performance.now() - slice > 12) {
+      await yieldToUi();
+      slice = performance.now();
+    }
+  }
+  try {
+    localStorage.setItem(SUPPORT_KEY, JSON.stringify({ ua: navigator.userAgent, n: all.length, at: Date.now(), hidden }));
+  } catch {
+    /* senza cache si rifà al prossimo avvio */
+  }
+  return new Set(hidden);
 }
 
 async function ensureFlagFont() {

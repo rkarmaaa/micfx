@@ -594,6 +594,43 @@ fn folders_delete_moves_sounds_to_root() {
 }
 
 #[test]
+fn folder_names_are_unique() {
+    let h = Harness::new();
+    let meme = h.core.upsert_folder(None, "Meme".into(), None).unwrap();
+    let altro = h.core.upsert_folder(None, "Altro".into(), None).unwrap();
+    // Stesso nome, anche con maiuscole e spazi diversi: rifiutato, nessuna seconda cartella.
+    let e = h.core.upsert_folder(None, "  meme ".into(), None).unwrap_err();
+    assert_eq!(e.code, ErrorCode::FolderExists);
+    let e = h.core.upsert_folder(Some(altro.id.clone()), "MEME".into(), None).unwrap_err();
+    assert_eq!(e.code, ErrorCode::FolderExists);
+    // Rinominare una cartella cambiando solo le maiuscole del suo nome va bene.
+    let renamed = h.core.upsert_folder(Some(meme.id.clone()), "MEME".into(), None).unwrap();
+    assert_eq!(renamed.id, meme.id);
+    let snap = h.core.get_snapshot().unwrap();
+    let names: Vec<_> = snap.library.folders.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["MEME", "Altro"]);
+}
+
+#[test]
+fn deleted_folder_restores_with_same_id_and_order() {
+    let h = Harness::new();
+    let a = h.core.upsert_folder(None, "A".into(), None).unwrap();
+    let b = h.core.upsert_folder(None, "B".into(), None).unwrap();
+    h.core.upsert_folder(None, "C".into(), None).unwrap();
+    h.core.delete_folder(b.id.clone()).unwrap();
+    // "Annulla": stesso ID e stessa posizione.
+    let back = h.core.upsert_folder(Some(b.id.clone()), "B".into(), Some(b.order)).unwrap();
+    assert_eq!(back.id, b.id);
+    let snap = h.core.get_snapshot().unwrap();
+    let names: Vec<_> = snap.library.folders.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["A", "B", "C"]);
+    assert_eq!(snap.library.folders[0].id, a.id);
+    // Un ID inventato non diventa un percorso o altro: solo caratteri sicuri.
+    let e = h.core.upsert_folder(Some("../x".into()), "D".into(), None).unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument);
+}
+
+#[test]
 fn ui_patch_merges_shallowly() {
     let h = Harness::new();
     let a = h.import_tone("a", 0.2);

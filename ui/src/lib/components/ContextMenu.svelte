@@ -1,4 +1,18 @@
 <script lang="ts">
+  import {
+    Check,
+    ChevronDown,
+    ChevronRight,
+    FolderInput,
+    FolderPlus,
+    Headphones,
+    Pencil,
+    Play,
+    SlidersHorizontal,
+    Smile,
+    Square,
+    Trash,
+  } from '../icons';
   import { app } from '../stores/app.svelte';
 
   let { x, y, ids, onclose }: { x: number; y: number; ids: string[]; onclose: () => void } = $props();
@@ -7,6 +21,11 @@
   let folderOpen = $state(false);
   const one = $derived(ids.length === 1 ? app.sound(ids[0]) : undefined);
   const playing = $derived(ids.some((id) => app.playingBySound.has(id)));
+  /** Cartella in cui sono già tutti i suoni del menu (undefined se sono sparsi). */
+  const sameFolder = $derived.by(() => {
+    const set = new Set(ids.map((id) => app.sound(id)?.folder_id ?? null));
+    return set.size === 1 ? [...set][0] : undefined;
+  });
 
   const pos = $derived({
     left: Math.max(4, Math.min(x, window.innerWidth - 240)),
@@ -61,7 +80,7 @@
 
 <div
   bind:this={root}
-  class="menu"
+  class="popover menu"
   role="menu"
   tabindex="-1"
   aria-label={one ? `Azioni per ${one.name}` : `${ids.length} suoni`}
@@ -70,112 +89,113 @@
   {onkeydown}
 >
   {#if one}
-    <button role="menuitem" type="button" onclick={() => run(() => app.play(one.id))}>▶ Riproduci <kbd>Invio</kbd></button>
-    <button role="menuitem" type="button" onclick={() => run(() => app.preview(one.id))}>🎧 Ascolta solo tu <kbd>Maiusc+Invio</kbd></button>
+    <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => app.play(one.id))}
+      ><Play /><span>Riproduci</span><kbd>Invio</kbd></button
+    >
+    <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => app.preview(one.id))}
+      ><Headphones /><span>Ascolta solo tu</span><kbd>Maiusc+Invio</kbd></button
+    >
     {#if playing}
-      <button role="menuitem" type="button" onclick={() => run(() => app.stop(one.id))}>■ Ferma</button>
+      <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => app.stop(one.id))}><Square /><span>Ferma</span></button>
     {/if}
-    <hr />
-    <button role="menuitem" type="button" onclick={() => run(() => (app.renamingId = one.id))}>Rinomina <kbd>F2</kbd></button>
+    <hr class="menu-sep" />
+    <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => (app.renamingId = one.id))}
+      ><Pencil /><span>Rinomina</span><kbd>F2</kbd></button
+    >
     <button
       role="menuitem"
       type="button"
+      class="menu-item"
       onclick={() => {
         const p = emojiAt();
         run(() => (app.emojiTarget = { soundId: one.id, ...p }));
-      }}>Cambia emoji <kbd>Ctrl+E</kbd></button
+      }}><Smile /><span>Cambia emoji</span><kbd>Ctrl+E</kbd></button
     >
-    <button role="menuitem" type="button" onclick={() => run(() => (app.editorId = one.id))}>Scorciatoia, volume e modalità… <kbd>Ctrl+Invio</kbd></button>
+    <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => (app.editorId = one.id))}
+      ><SlidersHorizontal /><span>Scorciatoia, volume e modalità…</span><kbd>Ctrl+Invio</kbd></button
+    >
   {:else}
-    <button role="menuitem" type="button" onclick={() => run(() => ids.forEach((id) => app.play(id)))}>▶ Riproduci tutti</button>
+    <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => ids.forEach((id) => app.play(id)))}
+      ><Play /><span>Riproduci tutti</span></button
+    >
     {#if playing}
-      <button role="menuitem" type="button" onclick={() => run(() => ids.forEach((id) => app.stop(id)))}>■ Ferma</button>
+      <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => ids.forEach((id) => app.stop(id)))}><Square /><span>Ferma</span></button>
     {/if}
   {/if}
-  <hr />
-  <button role="menuitem" type="button" aria-haspopup="true" aria-expanded={folderOpen} onclick={() => (folderOpen = !folderOpen)}
-    >📁 Sposta in cartella {folderOpen ? '▾' : '▸'}</button
+  <hr class="menu-sep" />
+  <button role="menuitem" type="button" class="menu-item" aria-haspopup="true" aria-expanded={folderOpen} onclick={() => (folderOpen = !folderOpen)}
+    ><FolderInput /><span>Sposta in cartella</span>{#if folderOpen}<ChevronDown />{:else}<ChevronRight />{/if}</button
   >
   {#if folderOpen}
     <div class="sub">
-      <button role="menuitem" type="button" onclick={() => run(() => app.moveToFolder(ids, null))}>Nessuna cartella</button>
+      <button role="menuitem" type="button" class="menu-item" aria-current={sameFolder === null} onclick={() => run(() => app.moveToFolder(ids, null))}
+        ><span>Nessuna cartella</span>{#if sameFolder === null}<Check />{/if}</button
+      >
       {#each app.folders as f (f.id)}
-        <button role="menuitem" type="button" onclick={() => run(() => app.moveToFolder(ids, f.id))}>{f.name}</button>
+        <button role="menuitem" type="button" class="menu-item" aria-current={sameFolder === f.id} onclick={() => run(() => app.moveToFolder(ids, f.id))}
+          ><span>{f.name}</span>{#if sameFolder === f.id}<Check />{/if}</button
+        >
       {/each}
-      <input
-        class="new-folder"
-        placeholder="＋ Nuova cartella…"
-        aria-label="Nome della nuova cartella, poi Invio"
-        maxlength="40"
-        onkeydown={async (e) => {
-          e.stopPropagation();
-          if (e.key === 'Escape') return onclose();
-          if (e.key !== 'Enter') return;
-          const name = e.currentTarget.value.trim();
-          if (!name) return;
-          const targets = [...ids];
-          onclose();
-          const f = await app.createFolder(name);
-          if (f) await app.moveToFolder(targets, f.id);
-        }}
-      />
+      <label class="new-folder">
+        <FolderPlus />
+        <input
+          placeholder="Nuova cartella…"
+          aria-label="Nome della nuova cartella, poi Invio"
+          maxlength="40"
+          onkeydown={async (e) => {
+            e.stopPropagation();
+            if (e.key === 'Escape') return onclose();
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            const name = e.currentTarget.value;
+            if (!name.trim()) return;
+            const targets = [...ids];
+            onclose();
+            // Se esiste già una cartella con questo nome si usa quella.
+            const f = await app.createFolder(name);
+            if (f) await app.moveToFolder(targets, f.id);
+          }}
+        />
+      </label>
     </div>
   {/if}
-  <hr />
-  <button role="menuitem" type="button" class="danger" onclick={() => run(() => app.deleteSounds(ids))}
-    >Elimina{ids.length > 1 ? ` ${ids.length} suoni` : ''} <kbd>Canc</kbd></button
+  <hr class="menu-sep" />
+  <button role="menuitem" type="button" class="menu-item danger" onclick={() => run(() => app.deleteSounds(ids))}
+    ><Trash /><span>Elimina{ids.length > 1 ? ` ${ids.length} suoni` : ''}</span><kbd>Canc</kbd></button
   >
 </div>
 
 <style>
   .menu {
-    position: fixed;
-    z-index: 60;
-    min-width: 230px;
-    background: var(--surface);
-    border: 1px solid var(--border-strong);
-    border-radius: 6px;
-    padding: 4px;
-    box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
-    display: flex;
-    flex-direction: column;
-    outline: none;
-  }
-  button {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    text-align: left;
-    background: none;
-    border: none;
-    padding: 6px 8px;
-    border-radius: 4px;
-  }
-  button:hover,
-  button:focus-visible {
-    background: var(--surface-2);
-    outline: none;
-  }
-  kbd {
-    font-size: 11px;
-    color: var(--fg-muted);
-  }
-  hr {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 4px 0;
+    min-width: 260px;
+    max-width: 320px;
   }
   .sub {
     display: flex;
     flex-direction: column;
-    padding-left: 14px;
-    max-height: 180px;
+    margin: 2px 0 2px 14px;
+    padding-left: 6px;
+    border-left: 1px solid var(--border);
+    max-height: 200px;
     overflow: auto;
   }
-  .danger {
-    color: var(--danger);
+  .sub [aria-current='true'] {
+    font-weight: 600;
+  }
+  .sub [aria-current='true'] :global(.lucide) {
+    color: var(--primary-text);
   }
   .new-folder {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 4px 0 2px;
+    padding-left: 8px;
+    color: var(--fg-muted);
+  }
+  .new-folder input {
+    flex: 1;
+    min-width: 0;
+    height: var(--h-sm);
   }
 </style>

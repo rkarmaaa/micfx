@@ -32,6 +32,8 @@ pub enum ErrorCode {
     IoError,
     SoundNotFound,
     FolderNotFound,
+    /// Esiste già una cartella con questo nome (senza distinzione tra maiuscole e minuscole).
+    FolderExists,
     ConfigRecovered,
     LibraryRecovered,
     PttSendFailed,

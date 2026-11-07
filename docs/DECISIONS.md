@@ -73,3 +73,38 @@ Scelte prese durante lo sviluppo, rispetto a [SPEC.md](SPEC.md). Le più recenti
   script in `tools/bench/measure.ps1`, misura da fare sulla build release.
 - Latenza hotkey → primo campione con trace QPC: non ancora strumentata.
 - Relay PTT con Discord reale e bridge del microfono (v1.1) non verificati.
+
+## Cartelle
+
+- Nomi unici senza distinzione tra maiuscole e minuscole: il core rifiuta i doppioni con `folder_exists`, la UI
+  seleziona la cartella che esiste già. Prima Invio e la perdita del focus del campo "nuova cartella" creavano
+  due cartelle identiche.
+- `upsert_folder` con un ID sconosciuto ricrea la cartella con quell'ID (solo `[A-Za-z0-9_-]`, massimo 64): è
+  l'"Annulla" dell'eliminazione, che rimette cartella, posizione e suoni come prima.
+- Cambiando cartella la selezione si azzera; le azioni su più suoni valgono solo per quelli visibili.
+
+## Selettore emoji
+
+- Misurato a freddo (finestra appena creata): ~0,8 s per il test su canvas delle emoji recenti e ~1,5 s per
+  impaginare tutte le 1914 emoji insieme. Ora: risultato del test in `localStorage` (si rifà se cambia la
+  WebView2 o dopo 30 giorni), dati precaricati con `requestIdleCallback` dopo l'apertura della finestra, lista
+  virtualizzata (solo le righe visibili, ~130 celle). Apertura ~50 ms; la prima volta in assoluto ~0,9 s con
+  uno skeleton, senza bloccare la finestra (test a pezzi da 12 ms).
+
+## Design
+
+- Sostituisce "il design arriverà dal Figma": design system in `ui/src/styles`, tema unico scuro non
+  modificabile, barra superiore `#202020`, primario `#4F46E5` come il logo, font Schibsted Grotesk, icone Lucide.
+- Anche la finestra nativa è scura (`theme(Dark)`, sfondo `#161616`): niente barra del titolo chiara né lampo
+  bianco all'apertura.
+- Impostazioni a pagina intera (non più finestra modale), con menu delle sezioni e versione del programma.
+
+## Pubblicazione
+
+- Repository pubblico `rkarmaaa/micfx` dal 7 novembre 2026, codice "tutti i diritti riservati" (LICENSE);
+  gli installer delle release sono liberi per uso personale. La cronologia è stata riscritta con l'email
+  noreply di GitHub prima della pubblicazione; il repository privato originale è `micfx-archivio`.
+- Release su GitHub con l'installer NSIS, compilato con `tools/release/build.ps1`: rustc scrive nei messaggi di
+  panic delle dipendenze il percorso `C:\Users\<nome>\.cargo\...`, lo script lo rimappa a `~` e verifica che
+  il nome utente non resti nell'eseguibile. Gli aggiornamenti oggi sono manuali: il nuovo installer chiude MicFX,
+  disinstalla la versione precedente (scelta predefinita) e installa la nuova; i dati non si toccano.

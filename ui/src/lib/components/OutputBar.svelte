@@ -1,24 +1,30 @@
 <script lang="ts">
+  // Volumi in basso: cuffie (quello che senti tu) e microfono virtuale (quello che sentono gli altri).
   import type { BusKind } from '../api';
+  import { ChevronDown, Headphones, Mic, MicOff, TriangleAlert } from '../icons';
   import { app } from '../stores/app.svelte';
   import { MAX_PERCENT, formatDb, percentToDb } from '../util/volume';
   import Switch from './Switch.svelte';
 
   const DEFAULTS: Record<BusKind, number> = { monitor: 79, cable: 100 };
 
-  type Row = {
-    bus: BusKind;
-    icon: string;
-    label: string;
-    hint: string;
-  };
-
-  const rows: Row[] = [
-    { bus: 'monitor', icon: '🎧', label: 'Il mio volume', hint: 'Quello che senti tu in cuffia' },
-    { bus: 'cable', icon: '🎙️', label: 'Volume microfono', hint: 'Quello che sentono gli altri su Discord' },
+  const rows: { bus: BusKind; label: string; hint: string }[] = [
+    { bus: 'monitor', label: 'Il mio volume', hint: 'Quello che senti tu in cuffia' },
+    { bus: 'cable', label: 'Volume microfono', hint: 'Quello che sentono gli altri su Discord' },
   ];
 
   const cableMissing = $derived(app.status.includes('cable_missing'));
+  let dock: HTMLElement;
+
+  // Le notifiche si appoggiano sopra la barra, qualunque sia la sua altezza.
+  $effect(() => {
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty('--dock-h', `${dock.offsetHeight}px`));
+    ro.observe(dock);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty('--dock-h');
+    };
+  });
 
   function percent(bus: BusKind) {
     return bus === 'monitor' ? app.monitorPercent : app.cablePercent;
@@ -43,103 +49,154 @@
   }
 </script>
 
-<section class="outputs" aria-label="Volumi">
-  {#each rows as r (r.bus)}
-    {@const enabled = app.settings?.outputs[r.bus].enabled ?? false}
-    {@const unavailable = r.bus === 'cable' && cableMissing}
-    {@const p = percent(r.bus)}
-    <div class="row" class:off={!enabled || unavailable}>
-      <span class="icon" aria-hidden="true">{r.icon}</span>
-      <div class="labels">
-        <span class="label">{r.label}</span>
-        <button
-          type="button"
-          class="device link"
-          title="{r.hint}. Clicca per scegliere il dispositivo."
-          onclick={() => (unavailable ? (app.guideOpen = true) : (app.settingsOpen = true))}
-        >
-          {unavailable ? 'VB-Cable non trovato · Configura' : deviceName(r.bus)}
-        </button>
+<section class="dock" aria-label="Volumi" bind:this={dock}>
+  <div class="rows">
+    {#each rows as r (r.bus)}
+      {@const enabled = app.settings?.outputs[r.bus].enabled ?? false}
+      {@const unavailable = r.bus === 'cable' && cableMissing}
+      {@const on = enabled && !unavailable}
+      {@const p = percent(r.bus)}
+      <div class="row" class:off={!on}>
+        <span class="badge" aria-hidden="true">
+          {#if r.bus === 'monitor'}<Headphones size={17} />{:else if on}<Mic size={17} />{:else}<MicOff size={17} />{/if}
+        </span>
+        <div class="labels">
+          <span class="label">{r.label}</span>
+          <button
+            type="button"
+            class="device"
+            class:warn={unavailable}
+            title="{r.hint}. Clic per scegliere il dispositivo."
+            onclick={() => (unavailable ? (app.guideOpen = true) : app.openSettings('audio'))}
+          >
+            {#if unavailable}<TriangleAlert size={12} />{/if}
+            <span>{unavailable ? 'VB-Cable non trovato · Configura' : deviceName(r.bus)}</span>
+            {#if !unavailable}<ChevronDown size={12} />{/if}
+          </button>
+        </div>
+        <Switch
+          checked={on}
+          disabled={unavailable}
+          label={enabled ? `Disattiva: ${r.hint.toLowerCase()}` : `Attiva: ${r.hint.toLowerCase()}`}
+          onchange={(v) => app.setOutputEnabled(r.bus, v)}
+        />
+        <input
+          type="range"
+          min="0"
+          max={MAX_PERCENT}
+          step="1"
+          value={p}
+          disabled={unavailable}
+          aria-label={r.label}
+          aria-valuetext="{p}% ({formatDb(percentToDb(p))})"
+          title="{formatDb(percentToDb(p))} · oltre 100% amplifica · rotellina per regolare, doppio clic per {DEFAULTS[r.bus]}%"
+          style:--fill="{(p / MAX_PERCENT) * 100}%"
+          oninput={(e) => app.setVolume(r.bus, +e.currentTarget.value)}
+          onwheel={(e) => wheel(r.bus, e)}
+          ondblclick={() => app.setVolume(r.bus, DEFAULTS[r.bus])}
+        />
+        <output class="value" class:boost={p > 100}>{p}%</output>
       </div>
-      <Switch
-        checked={enabled && !unavailable}
-        disabled={unavailable}
-        label={enabled ? `Disattiva: ${r.hint.toLowerCase()}` : `Attiva: ${r.hint.toLowerCase()}`}
-        onchange={(v) => app.setOutputEnabled(r.bus, v)}
-      />
-      <input
-        type="range"
-        min="0"
-        max={MAX_PERCENT}
-        step="1"
-        value={p}
-        disabled={unavailable}
-        aria-label={r.label}
-        aria-valuetext="{p}% ({formatDb(percentToDb(p))})"
-        title="{formatDb(percentToDb(p))} · oltre 100% amplifica · rotellina per regolare, doppio clic per {DEFAULTS[r.bus]}%"
-        style:--fill="{p / 2}%"
-        oninput={(e) => app.setVolume(r.bus, +e.currentTarget.value)}
-        onwheel={(e) => wheel(r.bus, e)}
-        ondblclick={() => app.setVolume(r.bus, DEFAULTS[r.bus])}
-      />
-      <output class="value">{p}%</output>
-    </div>
-  {/each}
+    {/each}
+  </div>
   {#if app.settings && !app.settings.outputs.cable.enabled && !cableMissing}
-    <p class="note">🔇 Microfono disattivato: i tuoi amici non sentono i suoni.</p>
+    <p class="note"><MicOff size={13} /> Microfono disattivato: i tuoi amici non sentono i suoni.</p>
   {/if}
 </section>
 
 <style>
-  .outputs {
-    display: grid;
-    gap: 6px;
-    padding: 10px 14px;
+  .dock {
+    flex: none;
+    padding: 10px 16px 12px;
     border-top: 1px solid var(--border);
     background: var(--surface);
   }
+  .rows {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    gap: 8px 28px;
+  }
   .row {
     display: grid;
-    grid-template-columns: 24px minmax(120px, 220px) auto 1fr 44px;
+    grid-template-columns: 34px minmax(110px, 190px) auto minmax(80px, 1fr) 44px;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    min-width: 0;
   }
-  .row.off .labels,
-  .row.off input,
-  .row.off .value {
-    opacity: 0.45;
+  .badge {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--r-lg);
+    background: var(--primary-soft);
+    color: var(--primary-text);
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease);
   }
-  .icon {
-    font-size: 18px;
-    text-align: center;
+  .off .badge {
+    background: var(--surface-2);
+    color: var(--fg-faint);
   }
   .labels {
     display: flex;
     flex-direction: column;
+    gap: 1px;
     min-width: 0;
   }
   .label {
+    font-size: var(--text-md);
     font-weight: 600;
   }
   .device {
-    font-size: 12px;
+    justify-content: flex-start;
+    gap: 3px;
+    height: auto;
+    max-width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    box-shadow: none;
     color: var(--fg-muted);
-    text-align: left;
+    font-size: var(--text-sm);
+    font-weight: 400;
+  }
+  .device span {
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    padding: 0;
+  }
+  .device:hover:not(:disabled) {
+    background: none;
+    color: var(--fg);
+  }
+  .device.warn {
+    color: var(--warn);
+  }
+  .off input[type='range'],
+  .off .value,
+  .off .label {
+    opacity: 0.5;
   }
   input[type='range'] {
     width: 100%;
   }
   .value {
+    color: var(--fg-2);
+    font-size: var(--text-md);
+    font-weight: 550;
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
-  .note {
-    margin: 0;
-    font-size: 12px;
+  .value.boost {
     color: var(--warn);
+  }
+  .note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    color: var(--warn);
+    font-size: var(--text-sm);
   }
 </style>

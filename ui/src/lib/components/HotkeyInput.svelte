@@ -2,6 +2,7 @@
   // Cattura di una scorciatoia: clic → premi la combinazione. Esc annulla, Canc/⌫ rimuove.
   // Durante la cattura le hotkey globali sono in pausa, altrimenti Windows le "ruberebbe".
   import type { HotkeyAction } from '../api';
+  import { TriangleAlert, X } from '../icons';
   import { app } from '../stores/app.svelte';
   import { captureFromEvent, formatAccelerator } from '../util/keys';
 
@@ -99,13 +100,16 @@
       <span class="hint">{partial || 'Premi la combinazione…'}</span>
     {:else if current}
       <kbd>{formatAccelerator(current.accelerator)}</kbd>
-      {#if current.conflict}<span class="badge" title="Usata da un'altra app: non funziona">⚠</span>{/if}
+      {#if current.conflict}<span class="badge" title="Usata da un'altra app: non funziona"><TriangleAlert size={14} /></span>{/if}
     {:else}
       <span class="none">Nessuna</span>
     {/if}
   </button>
   {#if current && !capturing}
-    <button type="button" class="icon" title="Rimuovi scorciatoia" aria-label="Rimuovi scorciatoia" onclick={() => commit(null)}>✕</button>
+    <button type="button" class="icon" title="Rimuovi scorciatoia" aria-label="Rimuovi scorciatoia" onclick={() => commit(null)}><X size={15} /></button>
+  {:else}
+    <!-- Stesso ingombro con e senza scorciatoia: i campi restano allineati in colonna. -->
+    <span class="x-space" aria-hidden="true"></span>
   {/if}
 </div>
 {#if capturing && !compact}
@@ -114,8 +118,8 @@
 {#if pending}
   <div class="confirm" role="alertdialog" aria-label="Scorciatoia già in uso">
     <span><kbd>{formatAccelerator(pending.accelerator)}</kbd> è già usata da {pending.owner}. Spostarla qui?</span>
-    <button type="button" onclick={() => commit(pending!.accelerator)}>Sposta</button>
-    <button type="button" onclick={() => (pending = null)}>Annulla</button>
+    <button type="button" class="primary sm" onclick={() => commit(pending!.accelerator)}>Sposta</button>
+    <button type="button" class="sm" onclick={() => (pending = null)}>Annulla</button>
   </div>
 {/if}
 {#if current?.conflict && !capturing}
@@ -130,44 +134,61 @@
     gap: 4px;
     align-items: center;
   }
+  .x-space {
+    width: var(--h-md);
+    flex: none;
+  }
   .capture {
-    min-width: 160px;
-    text-align: left;
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
+    justify-content: flex-start;
+    min-width: 180px;
+    padding: 0 8px;
+    background: var(--field);
+    font-weight: 450;
   }
   .compact .capture {
-    min-width: 120px;
+    min-width: 150px;
   }
-  .capture.active {
-    outline: 2px solid var(--accent);
+  .capture.active,
+  .capture.active:hover:not(:disabled) {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-soft-2);
   }
   .capture.conflict {
     border-color: var(--danger);
   }
   .hint,
   .none {
-    color: var(--fg-muted);
+    color: var(--fg-faint);
+  }
+  .hint {
+    color: var(--primary-text);
   }
   .badge {
+    display: inline-flex;
     color: var(--danger);
   }
   .help,
   .warn {
-    margin: 4px 0 0;
-    font-size: 12px;
+    margin: 6px 0 0;
     color: var(--fg-muted);
+    font-size: var(--text-sm);
   }
   .warn {
     color: var(--warn);
   }
   .confirm {
-    margin-top: 6px;
     display: flex;
-    gap: 6px;
-    align-items: center;
     flex-wrap: wrap;
-    font-size: 13px;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+    font-size: var(--text-md);
+  }
+  .confirm span {
+    flex: 1 1 220px;
   }
 </style>

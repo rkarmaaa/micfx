@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CircleCheck, CircleX, Info, LoaderCircle, X } from '../icons';
   import { toasts } from '../stores/toasts.svelte';
 </script>
 
@@ -11,15 +12,29 @@
       onmouseleave={() => toasts.release(t.id)}
     >
       <div class="row">
+        <span class="kind" aria-hidden="true">
+          {#if t.kind === 'error'}<CircleX size={18} />{:else if t.kind === 'success'}<CircleCheck size={18} />{:else if t.kind === 'progress'}<LoaderCircle
+              size={18}
+              class="spin"
+            />{:else}<Info size={18} />{/if}
+        </span>
         <div class="text">
           <strong>{t.title}</strong>
           {#if t.detail}<span class="detail">{t.detail}</span>{/if}
         </div>
         {#each t.actions ?? [] as a}
-          <button type="button" class="action" onclick={a.run}>{a.label}</button>
+          <!-- Un'azione vale una volta sola: un secondo clic su "Annulla" non deve ripetere il ripristino. -->
+          <button
+            type="button"
+            class="action"
+            onclick={() => {
+              toasts.dismiss(t.id);
+              a.run();
+            }}>{a.label}</button
+          >
         {/each}
         {#if t.kind !== 'progress'}
-          <button type="button" class="icon" aria-label="Chiudi notifica" onclick={() => toasts.dismiss(t.id)}>✕</button>
+          <button type="button" class="icon" aria-label="Chiudi notifica" title="Chiudi" onclick={() => toasts.dismiss(t.id)}><X size={15} /></button>
         {/if}
       </div>
       {#if t.lines?.length}
@@ -39,70 +54,115 @@
 <style>
   .toasts {
     position: fixed;
-    right: 12px;
-    bottom: 96px;
+    right: 16px;
+    bottom: calc(var(--dock-h, 0px) + 12px);
     display: flex;
     flex-direction: column;
     gap: 8px;
     z-index: 80;
-    width: min(380px, calc(100vw - 24px));
+    width: min(380px, calc(100vw - 32px));
     pointer-events: none;
   }
   .toast {
     pointer-events: auto;
-    background: var(--surface);
+    padding: 10px 10px 10px 12px;
     border: 1px solid var(--border-strong);
-    border-left: 4px solid var(--fg-muted);
-    border-radius: 6px;
-    padding: 8px 10px;
+    border-radius: var(--r-xl);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+    animation: toast-in var(--t-med) var(--ease);
   }
-  .toast.error {
-    border-left-color: var(--danger);
-  }
-  .toast.success {
-    border-left-color: var(--ok);
-  }
-  .toast.progress {
-    border-left-color: var(--accent);
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
   }
   .row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+  }
+  .kind {
+    display: inline-flex;
+    align-self: flex-start;
+    margin-top: 1px;
+    color: var(--fg-muted);
+  }
+  .error .kind {
+    color: var(--danger);
+  }
+  .success .kind {
+    color: var(--ok);
+  }
+  .progress .kind {
+    color: var(--primary-text);
+  }
+  .kind :global(.spin) {
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .text {
     flex: 1;
     display: flex;
     flex-direction: column;
+    gap: 1px;
     min-width: 0;
   }
+  strong {
+    font-size: var(--text-md);
+    font-weight: 600;
+  }
   .detail {
-    color: var(--fg-muted);
-    font-size: 12px;
     overflow: hidden;
+    color: var(--fg-muted);
+    font-size: var(--text-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .action {
+    height: var(--h-sm);
+    padding: 0 10px;
+    border-color: transparent;
+    background: var(--primary-soft);
+    box-shadow: none;
+    color: var(--primary-text);
+    font-size: var(--text-sm);
     font-weight: 600;
   }
+  .action:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--primary-soft-2);
+  }
+  .row :global(.icon) {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    align-self: flex-start;
+    color: var(--fg-faint);
+  }
   ul {
-    margin: 6px 0 0;
-    padding-left: 18px;
-    font-size: 12px;
+    margin: 6px 0 0 28px;
+    padding-left: 14px;
     color: var(--fg-muted);
+    font-size: var(--text-sm);
   }
   .bar {
-    margin-top: 6px;
     height: 4px;
-    background: var(--surface-2);
-    border-radius: 2px;
+    margin: 8px 0 2px 28px;
+    border-radius: 999px;
+    background: var(--track);
     overflow: hidden;
   }
   .bar span {
     display: block;
     height: 100%;
-    background: var(--accent);
-    transition: width 0.2s;
+    border-radius: inherit;
+    background: var(--primary);
+    transition: width 0.2s var(--ease);
   }
 </style>

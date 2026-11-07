@@ -2,6 +2,7 @@
   // Configurazione una tantum (SPEC §14). I passi che il core sa verificare si spuntano da soli,
   // in tempo reale, mentre l'utente cambia le impostazioni di Windows.
   import { api } from '../api';
+  import { Check, CircleHelp, ExternalLink, TriangleAlert } from '../icons';
   import { app } from '../stores/app.svelte';
   import Modal from './Modal.svelte';
 
@@ -28,20 +29,20 @@
 
   <ol class="steps">
     <li class:ok={cableOk}>
-      <span class="check" aria-label={cableOk ? 'Fatto' : 'Da fare'}>{cableOk ? '✅' : '①'}</span>
+      <span class="check" aria-label={cableOk ? 'Fatto' : 'Da fare'}>{#if cableOk}<Check size={15} strokeWidth={3} />{:else}1{/if}</span>
       <div>
         <strong>Installa VB-Cable</strong>
         {#if cableOk}
           <p>Trovato: {app.devices.find((d) => d.is_cable)?.name ?? 'CABLE Input'}.</p>
         {:else}
           <p>Scarica il pacchetto, estrailo, avvia <code>VBCABLE_Setup_x64.exe</code> come amministratore e riavvia il PC.</p>
-          <button type="button" class="primary" onclick={() => api.openLink('vb-cable')}>Apri vb-audio.com</button>
+          <button type="button" class="primary sm" onclick={() => api.openLink('vb-cable')}><ExternalLink size={14} /> Apri vb-audio.com</button>
         {/if}
       </div>
     </li>
 
     <li class:ok={micOk}>
-      <span class="check">{micOk ? '✅' : '②'}</span>
+      <span class="check" aria-label={micOk ? 'Fatto' : 'Da fare'}>{#if micOk}<Check size={15} strokeWidth={3} />{:else}2{/if}</span>
       <div>
         <strong>Manda la tua voce dentro VB-Cable</strong>
         {#if micOk}
@@ -52,35 +53,47 @@
             {defaultMic ? `«${defaultMic.name}»` : 'il tuo microfono'} → scheda <em>Ascolta</em> → spunta
             <em>Ascolta questo dispositivo</em> → <em>Riproduci tramite: CABLE Input</em> → OK.
           </p>
-          <button type="button" class="primary" disabled={!cableOk} onclick={() => api.openSoundSettings(1)}>Apri scheda Registrazione</button>
+          <button type="button" class="primary sm" disabled={!cableOk} onclick={() => api.openSoundSettings(1)}>Apri scheda Registrazione</button>
         {/if}
       </div>
     </li>
 
     <li class:ok={defaultOk}>
-      <span class="check">{defaultOk ? '✅' : '③'}</span>
+      <span class="check" aria-label={defaultOk ? 'Fatto' : 'Da fare'}>{#if defaultOk}<Check size={15} strokeWidth={3} />{:else}3{/if}</span>
       <div>
         <strong>Le cuffie restano il dispositivo predefinito</strong>
         {#if defaultOk}
           <p>Ok: CABLE Input non è il predefinito.</p>
         {:else}
           <p>Scheda <em>Riproduzione</em>: imposta le cuffie come predefinite, mai CABLE Input.</p>
-          <button type="button" onclick={() => api.openSoundSettings(0)}>Apri scheda Riproduzione</button>
+          <button type="button" class="sm" onclick={() => api.openSoundSettings(0)}>Apri scheda Riproduzione</button>
         {/if}
       </div>
     </li>
 
     <li>
-      <span class="check">④</span>
+      <span class="check">4</span>
       <div>
         <strong>In Discord</strong>
         <p>Impostazioni → Voce e video:</p>
         <ul>
           <li>Dispositivo di input: <em>CABLE Output (VB-Audio Virtual Cable)</em></li>
-          <li>Soppressione del rumore: <em>Nessuna</em> (Krisp taglia effetti e musica){app.discord ? (app.discord.krisp || app.discord.noise_suppression ? ' ⚠️ ora attiva' : ' ✅') : ''}</li>
-          <li>Controllo automatico del guadagno: <em>spento</em> (abbassa i suoni){app.discord ? (app.discord.automatic_gain_control ? ' ⚠️ ora acceso' : ' ✅') : ''}</li>
-          <li>Cancellazione dell'eco: <em>spenta</em>{app.discord ? (app.discord.echo_cancellation ? ' ⚠️ ora accesa' : ' ✅') : ''}</li>
-          <li>Attività vocale avanzata: <em>spenta</em> (apre il microfono solo sulla voce){app.discord?.advanced_vad ? ' ⚠️ ora accesa' : ''}</li>
+          <li>
+            Soppressione del rumore: <em>Nessuna</em> (Krisp taglia effetti e musica)
+            {#if app.discord}{@render state(app.discord.krisp || app.discord.noise_suppression, 'ora attiva')}{/if}
+          </li>
+          <li>
+            Controllo automatico del guadagno: <em>spento</em> (abbassa i suoni)
+            {#if app.discord}{@render state(app.discord.automatic_gain_control, 'ora acceso')}{/if}
+          </li>
+          <li>
+            Cancellazione dell'eco: <em>spenta</em>
+            {#if app.discord}{@render state(app.discord.echo_cancellation, 'ora accesa')}{/if}
+          </li>
+          <li>
+            Attività vocale avanzata: <em>spenta</em> (apre il microfono solo sulla voce)
+            {#if app.discord?.advanced_vad}{@render state(true, 'ora accesa')}{/if}
+          </li>
           <li>Modalità di input: <em>Attività vocale</em>, sensibilità manuale intorno a −45 dB<br />
             oppure push-to-talk con il relay nelle impostazioni di MicFX</li>
         </ul>
@@ -88,7 +101,7 @@
     </li>
 
     <li class:ok={rateOk}>
-      <span class="check">{rateOk ? '✅' : '⑤'}</span>
+      <span class="check" aria-label={rateOk ? 'Fatto' : 'Facoltativo'}>{#if rateOk}<Check size={15} strokeWidth={3} />{:else}5{/if}</span>
       <div>
         <strong>Facoltativo: tutto a 48 kHz</strong>
         <p>
@@ -101,50 +114,112 @@
   </ol>
 
   {#snippet footer()}
-    <span class="foot">Puoi riaprire questa guida dal pulsante ❔ in alto.</span>
+    <span class="foot">Puoi riaprire questa guida dal pulsante <CircleHelp size={13} /> in alto.</span>
     <button type="button" class="primary" onclick={close}>{cableOk && micOk ? 'Tutto pronto' : 'Chiudi'}</button>
   {/snippet}
 </Modal>
 
+{#snippet state(bad: boolean, text: string)}
+  {#if bad}
+    <span class="st bad"><TriangleAlert size={12} /> {text}</span>
+  {:else}
+    <span class="st ok"><Check size={12} strokeWidth={3} /> ok</span>
+  {/if}
+{/snippet}
+
 <style>
   .intro {
-    margin-top: 0;
+    margin-bottom: 16px;
     color: var(--fg-muted);
+    font-size: var(--text-md);
   }
   .steps {
-    list-style: none;
-    padding: 0;
-    margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
   .steps > li {
     display: flex;
-    gap: 10px;
+    gap: 14px;
+    padding: 14px 16px;
     border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px;
+    border-radius: var(--r-xl);
+    background: var(--bg);
   }
   .steps > li.ok {
-    border-color: var(--ok);
+    border-color: color-mix(in srgb, var(--ok) 35%, var(--border));
+    background: color-mix(in srgb, var(--ok) 5%, var(--bg));
   }
   .check {
-    font-size: 18px;
-    width: 24px;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--surface-3);
+    color: var(--fg-2);
+    font-size: var(--text-sm);
+    font-weight: 700;
     flex: none;
   }
+  .ok .check {
+    background: var(--ok);
+    color: #052e16;
+  }
+  strong {
+    font-weight: 600;
+  }
   p {
-    margin: 4px 0 8px;
+    margin: 4px 0 10px;
+    color: var(--fg-2);
+    font-size: var(--text-md);
+  }
+  p:last-child {
+    margin-bottom: 0;
   }
   ul {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
     margin: 0;
     padding-left: 18px;
+    color: var(--fg-2);
+    font-size: var(--text-md);
+  }
+  em {
+    color: var(--fg);
+    font-style: normal;
+    font-weight: 600;
+  }
+  .st {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 4px;
+    padding: 0 7px;
+    border-radius: 999px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 18px;
+    vertical-align: 1px;
+  }
+  .st.ok {
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+  .st.bad {
+    background: var(--warn-soft);
+    color: var(--warn);
   }
   .foot {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     flex: 1;
-    font-size: 12px;
     color: var(--fg-muted);
-    align-self: center;
+    font-size: var(--text-sm);
   }
 </style>

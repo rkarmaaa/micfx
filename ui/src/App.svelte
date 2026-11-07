@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { setLucideProps } from '@lucide/svelte/context';
   import { onMount } from 'svelte';
 
   import { onFileDrop } from './lib/api';
@@ -8,7 +9,7 @@
   import EmptyState from './lib/components/EmptyState.svelte';
   import FolderTabs from './lib/components/FolderTabs.svelte';
   import OutputBar from './lib/components/OutputBar.svelte';
-  import SettingsDialog from './lib/components/SettingsDialog.svelte';
+  import SettingsPage from './lib/components/SettingsPage.svelte';
   import SetupGuide from './lib/components/SetupGuide.svelte';
   import ShortcutsHelp from './lib/components/ShortcutsHelp.svelte';
   import SoundCollection from './lib/components/SoundCollection.svelte';
@@ -16,15 +17,17 @@
   import StatusBanner from './lib/components/StatusBanner.svelte';
   import Toasts from './lib/components/Toasts.svelte';
   import TopBar from './lib/components/TopBar.svelte';
+  import ViewControls from './lib/components/ViewControls.svelte';
   import { app, soundEmoji } from './lib/stores/app.svelte';
   import { isTypingTarget, loadKeyboardLayout } from './lib/util/keys';
+
+  // Icone Lucide: 16 px e tratto 2 di base, ogni uso può cambiarli.
+  setLucideProps({ size: 16, strokeWidth: 2 });
 
   let searchInput = $state<HTMLInputElement>();
   let fileDrag = $state<{ count: number; folder: string | null } | null>(null);
 
-  const overlayOpen = $derived(
-    !!(app.menu || app.emojiTarget || app.editorId || app.settingsOpen || app.guideOpen || app.shortcutsOpen),
-  );
+  const overlayOpen = $derived(!!(app.menu || app.emojiTarget || app.editorId || app.guideOpen || app.shortcutsOpen));
   const emojiSound = $derived(app.emojiTarget ? app.sound(app.emojiTarget.soundId) : undefined);
 
   onMount(() => {
@@ -58,13 +61,13 @@
       searchInput?.select();
       return;
     }
-    if (overlayOpen) return;
+    if (overlayOpen || app.settingsOpen) return;
     if (ctrl && (e.key === 'o' || e.key === 'O' || e.key === 'i' || e.key === 'I')) {
       e.preventDefault();
       app.pickAndImport();
     } else if (ctrl && e.key === ',') {
       e.preventDefault();
-      app.settingsOpen = true;
+      app.openSettings();
     } else if (ctrl && e.key === '1') {
       e.preventDefault();
       app.setPrefs({ view: 'grid' });
@@ -102,22 +105,29 @@
   <main class="fatal">
     <h1>MicFX non è riuscito a partire</h1>
     <p>{app.fatal}</p>
-    <button type="button" onclick={() => location.reload()}>Riprova</button>
+    <button type="button" class="primary" onclick={() => location.reload()}>Riprova</button>
   </main>
 {:else if !app.ready}
-  <main class="loading" aria-busy="true">Caricamento…</main>
+  <main class="loading" aria-busy="true"></main>
 {:else}
-  <main class="app">
-    <TopBar bind:searchInput />
-    <StatusBanner />
-    <FolderTabs dropTarget={fileDrag ? (fileDrag.folder ?? 'all') : null} />
-    {#if app.visible.length}
-      <SoundCollection />
-    {:else}
-      <EmptyState />
-    {/if}
-    <OutputBar />
-  </main>
+  {#if app.settingsOpen}
+    <SettingsPage onclose={() => (app.settingsOpen = false)} />
+  {:else}
+    <main class="app">
+      <TopBar bind:searchInput />
+      <StatusBanner />
+      <div class="toolbar">
+        <FolderTabs dropTarget={fileDrag ? (fileDrag.folder ?? 'all') : app.soundDropFolder} />
+        <ViewControls />
+      </div>
+      {#if app.visible.length}
+        <SoundCollection />
+      {:else}
+        <EmptyState />
+      {/if}
+      <OutputBar />
+    </main>
+  {/if}
 
   <!-- Props con ?. : in Svelte 5 un figlio può rileggere le props mentre il blocco {#if} si chiude. -->
   {#if app.menu}
@@ -145,9 +155,6 @@
   {#if app.editorId}
     <SoundEditor id={app.editorId} onclose={() => (app.editorId = null)} />
   {/if}
-  {#if app.settingsOpen}
-    <SettingsDialog onclose={() => (app.settingsOpen = false)} />
-  {/if}
   {#if app.guideOpen}
     <SetupGuide onclose={() => (app.guideOpen = false)} />
   {/if}
@@ -166,13 +173,28 @@
     display: flex;
     flex-direction: column;
   }
-  .loading,
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px 8px;
+    flex: none;
+  }
+  .loading {
+    height: 100vh;
+    background: linear-gradient(var(--bar-bg) 0 var(--bar-h), var(--bg) var(--bar-h));
+  }
   .fatal {
     height: 100vh;
     display: grid;
     place-content: center;
-    gap: 8px;
+    justify-items: center;
+    gap: 10px;
     text-align: center;
     color: var(--fg-muted);
+  }
+  .fatal h1 {
+    color: var(--fg);
+    font-size: var(--text-xl);
   }
 </style>

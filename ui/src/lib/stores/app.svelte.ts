@@ -23,7 +23,7 @@ import {
   type Snapshot,
   type Sound,
 } from '../api';
-import { fallbackEmoji, loadEmoji, suggestForName } from '../emoji/emoji';
+import { fallbackEmoji, loadEmoji, preloadEmoji, suggestForName } from '../emoji/emoji';
 import { errorText } from '../util/messages';
 import { dbToPercent, percentToDb } from '../util/volume';
 import { toasts } from './toasts.svelte';
@@ -58,6 +58,12 @@ export const SUPPORTED_EXT = ['mp3', 'wav', 'flac', 'ogg', 'oga', 'm4a', 'aac', 
 export function soundEmoji(s: Sound): string {
   const e = s.ui?.emoji;
   return typeof e === 'string' && e ? e : fallbackEmoji(s.id);
+}
+
+/** Nome di cartella come lo salva il core: spazi compattati, al massimo 40 caratteri (non unità UTF-16:
+ *  un'emoji tagliata a metà sarebbe un JSON che il core rifiuta). */
+export function cleanFolderName(name: string): string {
+  return Array.from(name.replace(/\s+/g, ' ').trim()).slice(0, 40).join('');
 }
 
 function soundOrder(s: Sound): number | null {
@@ -108,6 +114,8 @@ class AppStore {
   emojiTarget = $state<{ soundId: string; x: number; y: number } | null>(null);
   menu = $state<{ x: number; y: number; ids: string[] } | null>(null);
   settingsOpen = $state(false);
+  /** Sezione da mostrare all'apertura delle impostazioni (es. 'ptt' dall'avviso di Discord). */
+  settingsSection = $state<string | null>(null);
   guideOpen = $state(false);
   shortcutsOpen = $state(false);
   /** ID appena importati: evidenziati per qualche secondo. */
@@ -115,8 +123,15 @@ class AppStore {
   now = $state(Date.now());
   /** Cattura scorciatoia in corso: le hotkey globali sono in pausa. */
   capturing = $state(false);
+  /** Scheda sotto il puntatore mentre si trascinano suoni: 'all', l'ID di una cartella o null. */
+  soundDropFolder = $state<string | null>(null);
 
   private rafOn = false;
+  /** Suono selezionato da un clic che l'ha fatto suonare: si deseleziona quando l'audio finisce. */
+  private clickPlayed: string | null = null;
+  /** ...e il suo audio è partito davvero (un altro suono che finisce subito dopo il clic non conta). */
+  private clickStarted = false;
+  private creatingFolders = new Map<string, Promise<Folder | null>>();
   private prefsTimer: ReturnType<typeof setTimeout> | null = null;
   /** Volume voluto dall'utente e non ancora confermato dal core. */
   private volumeWant: Partial<Record<BusKind, number>> = {};
@@ -203,6 +218,7 @@ class AppStore {
       this.guideOpen = this.status.includes('cable_missing') || this.status.includes('mic_not_routed');
     }
     void this.backfillEmoji(this.sounds);
+    preloadEmoji();
   }
 
   async resync() {
@@ -234,10 +250,20 @@ class AppStore {
   private subscribe() {
     on('playback:started', (p) => {
       this.playing = [...this.playing.filter((x) => x.play_id !== p.play_id), p];
+      if (p.sound_id === this.clickPlayed) this.clickStarted = true;
       this.tick();
     });
     on('playback:ended', (p) => {
       this.playing = this.playing.filter((x) => x.play_id !== p.play_id);
+      // Finito tutto l'audio, il riquadro cliccato torna normale (niente bordo di selezione).
+      const id = this.clickPlayed;
+      if (!this.playing.length && id && this.clickStarted) {
+        this.clickPlayed = null;
+        if (this.selection.size === 1 && this.selection.has(id)) {
+          this.selection.clear();
+          this.anchorId = null;
+        }
+      }
     });
     on('library:changed', (c) => {
       const removed = new Set(c.removed);
@@ -303,9 +329,23 @@ class AppStore {
     }
   }
 
+  openSettings(section: string | null = null) {
+    this.menu = null;
+    this.emojiTarget = null;
+    this.editorId = null;
+    this.settingsSection = section;
+    this.settingsOpen = true;
+  }
+
   // ------------------------------------------------------------------ preferenze
 
   setPrefs(patch: Partial<Prefs>) {
+    // Cambiando cartella la selezione riparte da zero, come in Esplora risorse: niente azioni
+    // (Canc, sposta) su suoni selezionati altrove e ora invisibili.
+    if (patch.folder !== undefined && patch.folder !== this.prefs.folder) {
+      this.selection.clear();
+      this.anchorId = null;
+    }
     this.prefs = { ...this.prefs, ...patch };
     if (this.prefsTimer) clearTimeout(this.prefsTimer);
     this.prefsTimer = setTimeout(() => {
@@ -441,13 +481,28 @@ class AppStore {
     await api.updateSound(id, { mode }).catch((e) => fail(e));
   }
 
-  async moveToFolder(ids: string[], folderId: string | null) {
-    for (const id of ids) {
-      this.patchLocal(id, (x) => ({ ...x, folder_id: folderId }));
-      await api.updateSound(id, { folder_id: folderId }).catch((e) => fail(e));
+  /** Sposta i suoni (subito in vista, poi nel core). Chi non arriva al core torna dov'era. */
+  async moveToFolder(ids: string[], folderId: string | null, opts: { quiet?: boolean } = {}) {
+    const moving = ids.filter((id) => {
+      const s = this.sound(id);
+      return s !== undefined && s.folder_id !== folderId;
+    });
+    if (!moving.length) return;
+    const before = new Map(moving.map((id) => [id, this.sound(id)!.folder_id]));
+    const moved = new Set(moving);
+    this.sounds = this.sounds.map((s) => (moved.has(s.id) ? { ...s, folder_id: folderId } : s));
+    const results = await Promise.allSettled(moving.map((id) => api.updateSound(id, { folder_id: folderId })));
+    const failed = moving.filter((_, i) => results[i].status === 'rejected');
+    if (failed.length) {
+      const back = new Set(failed);
+      this.sounds = this.sounds.map((s) => (back.has(s.id) ? { ...s, folder_id: before.get(s.id) ?? null } : s));
+      const reason = (results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason;
+      fail(reason, failed.length === moving.length ? 'Spostamento non riuscito' : `${failed.length} suoni non spostati`);
     }
-    const name = folderId ? this.folders.find((f) => f.id === folderId)?.name : 'Tutti i suoni (nessuna cartella)';
-    toasts.show({ kind: 'success', title: ids.length === 1 ? `Spostato in ${name}` : `${ids.length} suoni spostati in ${name}` });
+    const ok = moving.length - failed.length;
+    if (!ok || opts.quiet) return;
+    const name = folderId ? `«${this.folders.find((f) => f.id === folderId)?.name ?? 'cartella'}»` : '«Tutti» (nessuna cartella)';
+    toasts.show({ kind: 'success', title: ok === 1 ? `Spostato in ${name}` : `${ok} suoni spostati in ${name}` });
   }
 
   /** Elimina subito dalla vista; per 20 s il core tiene i file e "Annulla" li rimette al loro posto. */
@@ -513,27 +568,97 @@ class AppStore {
 
   // ------------------------------------------------------------------ cartelle
 
-  async createFolder(name: string): Promise<Folder | null> {
-    try {
-      const f = await api.upsertFolder(null, name, null);
-      if (!this.folders.some((x) => x.id === f.id)) this.folders = [...this.folders, f];
-      return f;
-    } catch (e) {
-      fail(e);
-      return null;
-    }
+  /** Cartella con questo nome, senza badare a maiuscole e spazi (come il core). */
+  folderByName(name: string): Folder | undefined {
+    const key = cleanFolderName(name).toLowerCase();
+    return key ? this.folders.find((f) => f.name.toLowerCase() === key) : undefined;
+  }
+
+  /** Crea una cartella. Se ne esiste già una con lo stesso nome, o la sta già creando un'altra
+   *  richiesta (doppio Invio, Invio + perdita del focus), restituisce quella: mai due cartelle uguali. */
+  createFolder(name: string): Promise<Folder | null> {
+    const clean = cleanFolderName(name);
+    if (!clean) return Promise.resolve(null);
+    const existing = this.folderByName(clean);
+    if (existing) return Promise.resolve(existing);
+    const key = clean.toLowerCase();
+    const inflight = this.creatingFolders.get(key);
+    if (inflight) return inflight;
+    const p = (async () => {
+      try {
+        const f = await api.upsertFolder(null, clean, null);
+        this.addFolderLocal(f);
+        return f;
+      } catch (e) {
+        fail(e, 'Impossibile creare la cartella');
+        return null;
+      } finally {
+        this.creatingFolders.delete(key);
+      }
+    })();
+    this.creatingFolders.set(key, p);
+    return p;
+  }
+
+  private addFolderLocal(f: Folder) {
+    if (this.folders.some((x) => x.id === f.id)) return;
+    this.folders = [...this.folders, f].sort((a, b) => a.order - b.order);
   }
 
   async renameFolder(id: string, name: string) {
     const f = this.folders.find((x) => x.id === id);
-    if (!f || !name.trim() || name.trim() === f.name) return;
-    this.folders = this.folders.map((x) => (x.id === id ? { ...x, name: name.trim() } : x));
-    await api.upsertFolder(id, name, f.order).catch((e) => fail(e));
+    const clean = cleanFolderName(name);
+    if (!f || !clean || clean === f.name) return;
+    const other = this.folderByName(clean);
+    if (other && other.id !== id) {
+      toasts.error(`Esiste già una cartella «${other.name}»`, 'Scegli un altro nome.');
+      return;
+    }
+    const setName = (n: string) => (this.folders = this.folders.map((x) => (x.id === id ? { ...x, name: n } : x)));
+    setName(clean);
+    try {
+      await api.upsertFolder(id, clean, f.order);
+    } catch (e) {
+      setName(f.name);
+      fail(e, 'Impossibile rinominare la cartella');
+    }
   }
 
+  /** Elimina la cartella (i suoni tornano in "Tutti") con "Annulla" per qualche secondo. */
   async deleteFolder(id: string) {
+    const f = this.folders.find((x) => x.id === id);
+    if (!f) return;
+    const members = this.sounds.filter((s) => s.folder_id === id).map((s) => s.id);
     if (this.prefs.folder === id) this.setPrefs({ folder: 'all' });
-    await api.deleteFolder(id).catch((e) => fail(e));
+    try {
+      await api.deleteFolder(id);
+    } catch (e) {
+      fail(e, 'Impossibile eliminare la cartella');
+      return;
+    }
+    toasts.show({
+      kind: 'info',
+      title: `Cartella «${f.name}» eliminata`,
+      detail: members.length ? (members.length === 1 ? 'Il suono resta in «Tutti».' : `${members.length} suoni restano in «Tutti».`) : undefined,
+      timeout: 8000,
+      actions: [{ label: 'Annulla', run: () => void this.restoreFolder(f, members) }],
+    });
+  }
+
+  /** Ricrea la cartella con lo stesso ID e la stessa posizione, e ci rimette i suoni. */
+  private async restoreFolder(f: Folder, members: string[]) {
+    let back: Folder;
+    try {
+      back = await api.upsertFolder(f.id, f.name, f.order);
+    } catch (e) {
+      fail(e, 'Impossibile ripristinare la cartella');
+      return;
+    }
+    this.addFolderLocal(back);
+    // Tornano solo i suoni che nel frattempo non sono stati spostati altrove.
+    const still = members.filter((id) => this.sound(id)?.folder_id === null);
+    await this.moveToFolder(still, back.id, { quiet: true });
+    this.setPrefs({ folder: back.id });
   }
 
   // ------------------------------------------------------------------ scorciatoie
@@ -702,7 +827,16 @@ class AppStore {
 
   // ------------------------------------------------------------------ selezione
 
+  /** Clic su un riquadro: lo seleziona e lo suona; a fine audio la selezione sparisce da sola. */
+  playFromClick(id: string) {
+    this.select(id, 'single');
+    this.clickPlayed = id;
+    this.clickStarted = false;
+    void this.play(id);
+  }
+
   select(id: string, mode: 'single' | 'toggle' | 'range') {
+    this.clickPlayed = null;
     if (mode === 'single') {
       this.selection.clear();
       this.selection.add(id);
@@ -722,9 +856,11 @@ class AppStore {
     this.focusId = id;
   }
 
-  /** Bersaglio delle azioni: la selezione se contiene `id`, altrimenti solo `id`. */
+  /** Bersaglio delle azioni: la selezione visibile se contiene `id`, altrimenti solo `id`.
+   *  I suoni selezionati ma nascosti (spostati in un'altra cartella, filtrati) restano fuori. */
   targets(id: string): string[] {
-    return this.selection.has(id) && this.selection.size > 1 ? [...this.selection] : [id];
+    if (!this.selection.has(id) || this.selection.size < 2) return [id];
+    return this.visible.filter((s) => this.selection.has(s.id)).map((s) => s.id);
   }
 }
 

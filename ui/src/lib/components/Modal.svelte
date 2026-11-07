@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
 
+  import { X } from '../icons';
+
   let {
     title,
     onclose,
@@ -67,7 +69,7 @@
   >
     <header>
       <h2>{title}</h2>
-      <button class="close icon" type="button" aria-label="Chiudi" title="Chiudi (Esc)" onclick={onclose}>✕</button>
+      <button class="close icon" type="button" aria-label="Chiudi" title="Chiudi (Esc)" onclick={onclose}><X size={18} /></button>
     </header>
     <div class="body">{@render children()}</div>
     {#if footer}
@@ -80,53 +82,79 @@
   .backdrop {
     position: fixed;
     inset: 0;
-    background: rgb(0 0 0 / 0.4);
+    z-index: 50;
     display: grid;
     place-items: center;
-    z-index: 50;
-    padding: 16px;
+    padding: 24px;
+    background: var(--overlay);
+    animation: fade var(--t-med) var(--ease);
   }
   .backdrop.side {
     place-items: stretch end;
     padding: 0;
   }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
   .panel {
-    width: min(var(--w), 100%);
-    max-height: calc(100vh - 32px);
     display: flex;
     flex-direction: column;
-    background: var(--surface);
+    width: min(var(--w), 100%);
+    max-height: calc(100vh - 48px);
     border: 1px solid var(--border-strong);
-    border-radius: 8px;
+    border-radius: var(--r-2xl);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
     outline: none;
+    animation: rise var(--t-med) var(--ease);
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.985);
+    }
   }
   .side .panel {
-    max-height: 100vh;
     height: 100vh;
-    border-radius: 0;
+    max-height: 100vh;
     border-width: 0 0 0 1px;
+    border-radius: 0;
+    animation: slide 220ms var(--ease);
+  }
+  @keyframes slide {
+    from {
+      transform: translateX(24px);
+      opacity: 0;
+    }
   }
   header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    padding: 16px 14px 12px 20px;
   }
   h2 {
-    margin: 0;
-    font-size: 16px;
+    font-size: var(--text-lg);
   }
   .body {
-    padding: 16px;
-    overflow: auto;
     flex: 1;
+    overflow: auto;
+    padding: 4px 20px 20px;
   }
   footer {
     display: flex;
-    gap: 8px;
+    align-items: center;
     justify-content: flex-end;
-    padding: 12px 16px;
+    gap: 8px;
+    padding: 12px 20px;
     border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface-2) 45%, var(--surface));
+    border-radius: 0 0 var(--r-2xl) var(--r-2xl);
+  }
+  .side footer {
+    border-radius: 0;
   }
 </style>

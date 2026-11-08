@@ -142,7 +142,7 @@
   }
   .row {
     display: grid;
-    grid-template-columns: 34px minmax(96px, 150px) auto minmax(80px, 1fr) 44px;
+    grid-template-columns: 34px minmax(96px, 150px) auto minmax(80px, 1fr) 4.5ch;
     align-items: center;
     gap: 12px;
     min-width: 0;
@@ -261,10 +261,12 @@
     opacity: 0.5;
   }
   .value {
+    /* Attaccato allo slider: allineato a sinistra, metà del gap della riga. */
+    margin-left: -6px;
     color: var(--fg-2);
     font-size: var(--text-md);
     font-weight: 550;
-    text-align: right;
+    text-align: left;
     font-variant-numeric: tabular-nums;
   }
   .value.boost {

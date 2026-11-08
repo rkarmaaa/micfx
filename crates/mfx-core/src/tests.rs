@@ -409,6 +409,39 @@ fn hotkeys_register_conflict_and_replace() {
 }
 
 #[test]
+fn window_focus_suspends_hotkeys_on_window_keys() {
+    // F2 su un suono: con la finestra davanti F2 deve rinominare, non riprodurre.
+    let h = Harness::new();
+    let a = h.import_tone("a", 0.3);
+    let b = h.import_tone("bb", 0.3);
+    h.core.set_hotkey(HotkeyAction::Play { sound_id: a.clone() }, Some("F2".into())).unwrap();
+    h.core.set_hotkey(HotkeyAction::Play { sound_id: b.clone() }, Some("Ctrl+Alt+B".into())).unwrap();
+    let reg = || -> Vec<String> {
+        let mut v: Vec<String> = h.world.lock().unwrap().registered.iter().map(|r| r.1.clone()).collect();
+        v.sort();
+        v
+    };
+    assert_eq!(reg(), vec!["Ctrl+Alt+B", "F2"]);
+
+    h.core.window_focused(true);
+    assert_eq!(reg(), vec!["Ctrl+Alt+B"]);
+    // per la UI resta attiva (non è un conflitto)
+    let snap = h.core.get_snapshot().unwrap();
+    assert!(snap.hotkeys.iter().all(|k| k.active && !k.conflict));
+    // una hotkey impostata con la finestra davanti parte già sospesa
+    h.core.set_hotkey(HotkeyAction::StopAll, Some("Escape".into())).unwrap();
+    assert_eq!(reg(), vec!["Ctrl+Alt+B"]);
+
+    // pausa e ripresa con la finestra ancora davanti: restano sospese
+    h.core.pause_hotkeys(true).unwrap();
+    h.core.pause_hotkeys(false).unwrap();
+    assert_eq!(reg(), vec!["Ctrl+Alt+B"]);
+
+    h.core.window_focused(false);
+    assert_eq!(reg(), vec!["Ctrl+Alt+B", "Escape", "F2"]);
+}
+
+#[test]
 fn delete_and_undo_restores_sound_and_hotkey() {
     let h = Harness::new();
     let a = h.import_tone("a", 0.3);

@@ -65,7 +65,7 @@ const DEFAULT_PREFS: Prefs = {
   hiddenBanners: [],
 };
 
-export const SUPPORTED_EXT = ['mp3', 'wav', 'flac', 'ogg', 'oga', 'm4a', 'aac', 'mp4'];
+export const SUPPORTED_EXT = ['mp3', 'wav', 'flac', 'ogg', 'oga', 'opus', 'm4a', 'aac', 'mp4'];
 
 export function soundEmoji(s: Sound): string {
   const e = s.ui?.emoji;

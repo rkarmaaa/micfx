@@ -38,6 +38,10 @@ Scelte prese durante lo sviluppo, rispetto a [SPEC.md](SPEC.md). Le più recenti
   dallo scancode col layout attivo: sulla tastiera italiana il tasto "è" resta lo stesso tasto.
 - Una combinazione appartiene a una sola azione: assegnarla altrove la sposta (la UI chiede conferma prima).
 - Durante la cattura di una scorciatoia la UI mette in pausa le hotkey globali, altrimenti Windows le intercetta.
+- Con la finestra di MicFX in primo piano le hotkey che coincidono con i suoi tasti (F2, Invio, Canc, frecce,
+  lettere, Ctrl+A/E/F/O/M/1/2/, e la modifica del testo: `Accelerator::used_by_window`) sono sospese e tornano
+  quando la finestra perde il focus; per la UI restano attive. Senza, F2 su un suono lo riproduceva invece di
+  rinominarlo.
 - Di default nessuna scorciatoia, né per i suoni né per le azioni globali.
 
 ## Libreria e UX
@@ -48,6 +52,9 @@ Scelte prese durante lo sviluppo, rispetto a [SPEC.md](SPEC.md). Le più recenti
 - Trascinando cartelle si importano ricorsivamente i file audio (massimo 500 per volta).
 - Emoji del suono in `sound.ui.emoji`; preferenze di vista in `settings.ui.prefs` (vista, ordinamento, dimensione,
   cartella, emoji recenti, tono della pelle). Ordine manuale in `sound.ui.order` (un solo update per spostamento).
+- **Opus** (i `.ogg` del soundboard di Discord, `.opus`): Symphonia demuxa Ogg Opus ma non lo decodifica; i
+  pacchetti li decodifica `opus-rs` (Rust puro, provato contro libopus). Scartato `opus-decoder` (overflow in
+  CELT su file reali) e libopus in C (serve cmake nelle build). Il pre-skip e il padding finale si tolgono.
 - Ogni suono importato riceve subito un'emoji suggerita dal nome (italiano + inglese), o una di riserva stabile.
 
 ## Emoji

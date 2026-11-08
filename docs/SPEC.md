@@ -140,7 +140,7 @@ Rust per tutto ciò che gira sempre, Tauri 2 come guscio, una WebView solo per l
 - `tauri-plugin-global-shortcut`: un modulo proprio su `RegisterHotKey` (sezione 8) dà controllo diretto su `MOD_NOREPEAT`, sui conflitti e sul thread che riceve i messaggi.
 - Electron, .NET/WPF: runtime residente di decine di MB, incompatibile con il budget di riposo.
 - UI nativa (Slint, egui, Win32): footprint minore con la finestra aperta, ma tradurre il Figma costa molto di più. Con la WebView effimera il costo a riposo è lo stesso.
-- File `.opus`: Symphonia non li decodifica. Fuori dalla v1.
+- File Opus (`.opus`, `.ogg` di Discord): Symphonia non li decodifica; vedi DECISIONS (`opus-rs`).
 
 ## 6. Motore audio
 

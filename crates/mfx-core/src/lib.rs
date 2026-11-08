@@ -194,6 +194,12 @@ impl CoreHandle {
         self.call(|e| e.check_discord())
     }
 
+    /// La finestra ha preso o perso il focus: con la finestra davanti le hotkey globali che coincidono
+    /// con i suoi tasti (F2, Invio, Canc, ...) restano sospese.
+    pub fn window_focused(&self, focused: bool) {
+        let _ = self.call(move |e| e.set_window_focused(focused));
+    }
+
     pub fn ui_hidden(&self) {
         let _ = self.call(|e| e.ui_hidden());
     }

@@ -119,6 +119,8 @@ struct HotkeySlot {
     id: i32,
     active: bool,
     conflict: bool,
+    /// Tolta di proposito mentre la finestra di MicFX è in primo piano (vedi `window_focused`).
+    suspended: bool,
 }
 
 struct TrashEntry {
@@ -163,6 +165,8 @@ pub struct Engine {
     muted_mics: Vec<String>,
     timers: Timers,
     ui_open: bool,
+    /// La finestra di MicFX ha il focus: le hotkey che userebbe anche lei (F2, Invio, ...) sono sospese.
+    window_focused: bool,
     trash: Vec<TrashEntry>,
     pending_deletes: Vec<PathBuf>,
     jobs: HashMap<u64, Job>,
@@ -254,6 +258,7 @@ impl Engine {
             muted_mics: Vec::new(),
             timers: Timers::default(),
             ui_open: false,
+            window_focused: false,
             trash: Vec::new(),
             pending_deletes: Vec::new(),
             jobs: HashMap::new(),
@@ -990,7 +995,7 @@ impl Engine {
             }
             let id = self.next_hotkey_id;
             self.next_hotkey_id += 1;
-            self.hotkeys.push(HotkeySlot { binding: b, id, active: false, conflict: false });
+            self.hotkeys.push(HotkeySlot { binding: b, id, active: false, conflict: false, suspended: false });
             let i = self.hotkeys.len() - 1;
             self.register_slot(i);
         }
@@ -1000,9 +1005,10 @@ impl Engine {
         let slot = &self.hotkeys[i];
         let paused_out = self.hotkeys_paused && slot.binding.action != HotkeyAction::PauseHotkeys;
         let (id, accel) = (slot.id, Accelerator::parse(&slot.binding.accelerator));
+        let suspended = self.window_focused && accel.as_ref().is_ok_and(|a| a.used_by_window(cfg!(target_os = "macos")));
         let (active, conflict) = match accel {
             Err(_) => (false, false),
-            Ok(_) if paused_out => (false, false),
+            Ok(_) if paused_out || suspended => (false, false),
             Ok(a) => match self.platform.register_hotkey(id, a) {
                 Ok(()) => (true, false),
                 Err(RegisterError::Conflict) => (false, true),
@@ -1014,8 +1020,42 @@ impl Engine {
         };
         let slot = &mut self.hotkeys[i];
         slot.active = active;
-        if !paused_out {
+        slot.suspended = suspended && !paused_out;
+        if !paused_out && !suspended {
             slot.conflict = conflict;
+        }
+    }
+
+    /// La finestra ha preso o perso il focus. Con la finestra davanti, una hotkey globale su F2 o Invio
+    /// ruberebbe il tasto alla finestra (F2 riprodurrebbe il suono invece di rinominarlo): si toglie e si
+    /// rimette appena la finestra va dietro. La UI continua a mostrarla attiva.
+    pub(crate) fn set_window_focused(&mut self, focused: bool) {
+        if focused == self.window_focused {
+            return;
+        }
+        self.window_focused = focused;
+        let mac = cfg!(target_os = "macos");
+        let mut changed = false;
+        for i in 0..self.hotkeys.len() {
+            let h = &self.hotkeys[i];
+            if !Accelerator::parse(&h.binding.accelerator).is_ok_and(|a| a.used_by_window(mac)) {
+                continue;
+            }
+            if focused {
+                if h.active {
+                    self.platform.unregister_hotkey(h.id);
+                    self.hotkeys[i].active = false;
+                    self.hotkeys[i].suspended = true;
+                    changed = true;
+                }
+            } else if h.suspended {
+                self.hotkeys[i].suspended = false;
+                self.register_slot(i);
+                changed = true;
+            }
+        }
+        if changed {
+            self.emit_hotkeys();
         }
     }
 
@@ -1038,7 +1078,7 @@ impl Engine {
             .map(|h| Hotkey {
                 action: h.binding.action.clone(),
                 accelerator: h.binding.accelerator.clone(),
-                active: h.active,
+                active: h.active || h.suspended,
                 conflict: h.conflict,
             })
             .collect()
@@ -1093,6 +1133,7 @@ impl Engine {
                     id,
                     active: false,
                     conflict: false,
+                    suspended: false,
                 });
                 let i = self.hotkeys.len() - 1;
                 self.register_slot(i);
@@ -1118,6 +1159,7 @@ impl Engine {
                     self.platform.unregister_hotkey(self.hotkeys[i].id);
                     self.hotkeys[i].active = false;
                 }
+                self.hotkeys[i].suspended = false;
             } else {
                 self.register_slot(i);
             }
@@ -1301,11 +1343,13 @@ impl Engine {
     }
 
     pub(crate) fn ui_hidden(&mut self) {
+        self.set_window_focused(false);
         let secs = self.settings.ui.keepalive_s as u64;
         self.timers.ui_keepalive = Some(Instant::now() + Duration::from_secs(secs));
     }
 
     pub(crate) fn ui_closed(&mut self) {
+        self.set_window_focused(false);
         self.ui_open = false;
         self.timers.ui_keepalive = None;
     }
@@ -1496,7 +1540,7 @@ impl Engine {
                 }
                 let id = self.next_hotkey_id;
                 self.next_hotkey_id += 1;
-                self.hotkeys.push(HotkeySlot { binding: b, id, active: false, conflict: false });
+                self.hotkeys.push(HotkeySlot { binding: b, id, active: false, conflict: false, suspended: false });
                 let i = self.hotkeys.len() - 1;
                 self.register_slot(i);
             }

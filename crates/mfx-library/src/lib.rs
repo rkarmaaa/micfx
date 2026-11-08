@@ -16,7 +16,7 @@ pub use index::{Folder, LibraryIndex, PlayMode, Sound, SoundSource};
 pub use sbpcm::{SbPcmError, SbPcmFile, SbPcmHeader};
 
 /// Estensioni accettate all'import (SPEC F04).
-pub const SUPPORTED_EXTENSIONS: &[&str] = &["mp3", "wav", "flac", "ogg", "oga", "m4a", "aac", "mp4"];
+pub const SUPPORTED_EXTENSIONS: &[&str] = &["mp3", "wav", "flac", "ogg", "oga", "opus", "m4a", "aac", "mp4"];
 
 /// Frequenza di campionamento interna di tutta la libreria.
 pub const SAMPLE_RATE: u32 = 48_000;

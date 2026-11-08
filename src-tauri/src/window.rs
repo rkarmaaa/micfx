@@ -51,6 +51,7 @@ fn create(app: &AppHandle) -> tauri::Result<()> {
             hide(&handle);
         }
         WindowEvent::Moved(_) | WindowEvent::Resized(_) => save_rect(&handle),
+        WindowEvent::Focused(f) => handle.state::<CoreHandle>().window_focused(*f),
         WindowEvent::Destroyed => handle.state::<CoreHandle>().ui_closed(),
         _ => {}
     });

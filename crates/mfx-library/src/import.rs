@@ -8,9 +8,11 @@ use std::path::Path;
 
 use ebur128::{EbuR128, Mode};
 use symphonia::core::codecs::audio::AudioDecoderOptions;
+use symphonia::core::codecs::audio::well_known::CODEC_ID_OPUS;
 use symphonia::core::errors::Error as SymError;
 use symphonia::core::formats::probe::Hint;
-use symphonia::core::formats::{FormatOptions, TrackType};
+use symphonia::core::formats::{FormatOptions, FormatReader, TrackType};
+use symphonia::core::packet::Packet;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 
@@ -142,6 +144,13 @@ fn decode(path: &Path, max_duration_s: u32) -> Result<Decoded, ImportError> {
     let (track_id, mut decoder) = {
         let track = format.default_track(TrackType::Audio).ok_or(ImportError::Unsupported)?;
         let params = track.codec_params.as_ref().and_then(|p| p.audio()).ok_or(ImportError::Unsupported)?;
+        if params.codec == CODEC_ID_OPUS {
+            // Ogg Opus (.ogg del soundboard di Discord, .opus): Symphonia separa i pacchetti, li decodifica
+            // opus-decoder.
+            let head = params.extra_data.as_deref().and_then(OpusHead::parse).ok_or(ImportError::Unsupported)?;
+            let id = track.id;
+            return decode_opus(&mut *format, id, &head, path, max_duration_s);
+        }
         let decoder = symphonia::default::get_codecs()
             .make_audio_decoder(params, &AudioDecoderOptions::default())
             .map_err(|_| ImportError::Unsupported)?;
@@ -154,20 +163,7 @@ fn decode(path: &Path, max_duration_s: u32) -> Result<Decoded, ImportError> {
     let mut rate = 0u32;
     let mut decode_errors = 0u32;
 
-    loop {
-        let packet = match format.next_packet() {
-            Ok(Some(p)) => p,
-            Ok(None) => break,
-            Err(SymError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
-            Err(SymError::ResetRequired) => break,
-            Err(e) => {
-                if samples.is_empty() {
-                    return Err(ImportError::DecodeFailed(e.to_string()));
-                }
-                tracing::warn!("{}: lettura interrotta: {e}", path.display());
-                break;
-            }
-        };
+    while let Some(packet) = next_packet(&mut *format, path, !samples.is_empty())? {
         if packet.track_id != track_id {
             continue;
         }
@@ -212,6 +208,117 @@ fn decode(path: &Path, max_duration_s: u32) -> Result<Decoded, ImportError> {
         return Err(ImportError::Empty);
     }
     Ok(Decoded { samples, channels, rate })
+}
+
+/// Prossimo pacchetto del file; `None` a fine file o se la lettura si interrompe dopo che qualcosa è già
+/// stato decodificato (si tiene quello che c'è).
+fn next_packet(format: &mut dyn FormatReader, path: &Path, have_audio: bool) -> Result<Option<Packet>, ImportError> {
+    match format.next_packet() {
+        Ok(p) => Ok(p),
+        Err(SymError::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => Ok(None),
+        Err(SymError::ResetRequired) => Ok(None),
+        Err(e) if !have_audio => Err(ImportError::DecodeFailed(e.to_string())),
+        Err(e) => {
+            tracing::warn!("{}: lettura interrotta: {e}", path.display());
+            Ok(None)
+        }
+    }
+}
+
+/// Intestazione `OpusHead` di Ogg Opus (RFC 7845 §5.1).
+struct OpusHead {
+    channels: usize,
+    pre_skip: usize,
+    gain_db: f32,
+    /// Famiglia di mappatura ≠ 0 (più di due canali).
+    multistream: Option<opus_rs::multistream::ChannelMappingTable>,
+}
+
+impl OpusHead {
+    fn parse(b: &[u8]) -> Option<Self> {
+        if b.len() < 19 || &b[..8] != b"OpusHead" {
+            return None;
+        }
+        let channels = b[9] as usize;
+        let pre_skip = u16::from_le_bytes([b[10], b[11]]) as usize;
+        let gain_db = i16::from_le_bytes([b[16], b[17]]) as f32 / 256.0;
+        let multistream = match b[18] {
+            0 if (1..=2).contains(&channels) => None,
+            0 => return None,
+            family => Some(opus_rs::multistream::ChannelMappingTable::parse(family, b[9], &b[19..])?),
+        };
+        (channels > 0).then_some(Self { channels, pre_skip, gain_db, multistream })
+    }
+}
+
+enum OpusDec {
+    Single(Box<opus_rs::OpusDecoder>),
+    Multi(opus_rs::multistream::MultistreamDecoder),
+}
+
+impl OpusDec {
+    /// `frame_size`: capacità di `out` per canale. Restituisce i campioni decodificati per canale.
+    fn decode(&mut self, packet: &[u8], frame_size: usize, out: &mut [f32]) -> Result<usize, &'static str> {
+        match self {
+            OpusDec::Single(d) => d.decode(packet, frame_size, out),
+            OpusDec::Multi(d) => d.decode(packet, frame_size, out),
+        }
+    }
+}
+
+fn decode_opus(
+    format: &mut dyn FormatReader,
+    track_id: u32,
+    head: &OpusHead,
+    path: &Path,
+    max_duration_s: u32,
+) -> Result<Decoded, ImportError> {
+    // Opus decodifica sempre a 48 kHz: niente resampling dopo.
+    const RATE: u32 = 48_000;
+    let ch = head.channels;
+    let mut dec = match &head.multistream {
+        None => opus_rs::OpusDecoder::new(RATE as i32, ch).map(|d| OpusDec::Single(Box::new(d))),
+        Some(t) => opus_rs::multistream::MultistreamDecoder::new(RATE as i32, t.clone()).map(OpusDec::Multi),
+    }
+    .map_err(|_| ImportError::Unsupported)?;
+
+    // 120 ms, il pacchetto Opus più lungo.
+    const MAX_FRAME: usize = 5760;
+    let mut buf = vec![0f32; MAX_FRAME * ch];
+    let mut samples: Vec<f32> = Vec::new();
+    let mut skip = head.pre_skip;
+    let mut decode_errors = 0u32;
+    while let Some(packet) = next_packet(format, path, !samples.is_empty())? {
+        if packet.track_id != track_id {
+            continue;
+        }
+        let n = match dec.decode(&packet.data, MAX_FRAME, &mut buf) {
+            Ok(n) => n.min(buf.len() / ch),
+            Err(e) => {
+                decode_errors += 1;
+                if decode_errors > 64 && samples.is_empty() {
+                    return Err(ImportError::DecodeFailed(e.to_string()));
+                }
+                continue;
+            }
+        };
+        // Pre-skip dell'encoder all'inizio, padding dell'ultima pagina (granule) alla fine.
+        let start = skip.min(n);
+        skip -= start;
+        let end = n.saturating_sub(packet.trim_end.get() as usize).max(start);
+        samples.extend_from_slice(&buf[start * ch..end * ch]);
+        if (samples.len() / ch) as u64 > max_duration_s as u64 * RATE as u64 {
+            return Err(ImportError::TooLong { max_s: max_duration_s });
+        }
+    }
+    if samples.is_empty() {
+        return Err(ImportError::Empty);
+    }
+    if head.gain_db != 0.0 {
+        let k = db_to_lin(head.gain_db);
+        samples.iter_mut().for_each(|s| *s *= k);
+    }
+    Ok(Decoded { samples, channels: ch, rate: RATE })
 }
 
 pub(crate) fn process(d: Decoded, opts: &ImportOptions) -> Result<Processed, ImportError> {
@@ -480,6 +587,42 @@ mod tests {
         assert!(hash_file(&src).unwrap().len() == 16);
         drop(f);
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn imports_ogg_opus() {
+        // Come i .ogg del soundboard di Discord: Opus in Ogg. 0,5 s di 440 Hz stereo (ffmpeg, libopus 24k).
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/tone-opus.ogg");
+        let d = decode(&src, 600).unwrap();
+        assert_eq!((d.channels, d.rate), (2, 48_000));
+        // Il pre-skip (312 campioni) è tolto: restano 0,5 s esatti, salvo il padding dell'ultima pagina.
+        let frames = d.samples.len() / 2;
+        assert!((frames as i64 - 24_000).abs() < 480, "frames {frames}");
+        let peak = d.samples.iter().fold(0f32, |m, s| m.max(s.abs()));
+        // ffmpeg (volumedetect) sullo stesso file: picco −20,7 dBFS.
+        let peak_db = 20.0 * peak.log10();
+        assert!((peak_db + 20.7).abs() < 0.5, "picco {peak_db} dB");
+
+        let dir = std::env::temp_dir().join(format!("mfx-import-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let r = import_to(&src, &dir.join("o.sbpcm"), &opts()).unwrap();
+        assert_eq!(r.channels, 2);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn opus_head_parsing() {
+        let mut h = b"OpusHead\x01\x02\x38\x01\x80\xbb\x00\x00\x00\x01\x00".to_vec();
+        let p = OpusHead::parse(&h).unwrap();
+        assert_eq!((p.channels, p.pre_skip, p.gain_db), (2, 312, 1.0));
+        assert!(p.multistream.is_none());
+        h[9] = 6; // famiglia 0 con 6 canali: non valida
+        assert!(OpusHead::parse(&h).is_none());
+        h[18] = 1;
+        h.extend_from_slice(&[4, 2, 0, 4, 1, 2, 3, 5]);
+        let t = OpusHead::parse(&h).unwrap().multistream.unwrap();
+        assert_eq!((t.stream_count, t.coupled_count, t.mapping), (4, 2, vec![0, 4, 1, 2, 3, 5]));
+        assert!(OpusHead::parse(b"OggS....").is_none());
     }
 
     #[test]

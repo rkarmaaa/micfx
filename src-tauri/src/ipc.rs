@@ -73,7 +73,7 @@ pub async fn pick_and_import(
             .file()
             .set_parent(&window)
             .set_title("Aggiungi suoni")
-            .add_filter("File audio", &["mp3", "wav", "flac", "ogg", "oga", "m4a", "aac", "mp4"])
+            .add_filter("File audio", &["mp3", "wav", "flac", "ogg", "oga", "opus", "m4a", "aac", "mp4"])
             .add_filter("Tutti i file", &["*"])
             .blocking_pick_files();
         let Some(files) = picked else { return Ok(None) };

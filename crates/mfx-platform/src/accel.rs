@@ -78,6 +78,27 @@ pub struct Accelerator {
     pub key: Key,
 }
 
+impl Accelerator {
+    /// La combinazione serve anche dentro la finestra di MicFX (F2, Invio, Canc, frecce, testo nei campi,
+    /// Ctrl+A/E/F/O/M/1/2/, e la modifica del testo). Una hotkey globale la ruberebbe alla finestra:
+    /// finché la finestra è in primo piano va sospesa. `mac`: il modificatore principale è ⌘ (`win`).
+    pub fn used_by_window(&self, mac: bool) -> bool {
+        let m = self.mods;
+        // Tasti da soli (o con Maiusc, come Maiusc+Invio e Maiusc+F10, o le maiuscole scritte nei campi).
+        if !m.ctrl && !m.alt && !m.win {
+            return !self.key.ok_without_mods();
+        }
+        let primary = if mac { m.win && !m.ctrl } else { m.ctrl && !m.win };
+        primary
+            && !m.alt
+            && matches!(
+                self.key.name,
+                "A" | "E" | "F" | "O" | "M" | "1" | "2" | "Comma" | "Enter" | "C" | "V" | "X" | "Z" | "Y"
+                    | "Backspace" | "Delete" | "Left" | "Right" | "Up" | "Down" | "Home" | "End"
+            )
+    }
+}
+
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum AccelError {
     #[error("combinazione vuota")]
@@ -421,6 +442,18 @@ mod tests {
         assert_eq!(a.to_string(), "Ctrl+Alt+F1");
         assert_eq!(Accelerator::parse("Numpad5").unwrap().key.fixed_vk, Some(0x65));
         assert!(Accelerator::parse("F13").unwrap().key.ok_without_mods());
+    }
+
+    #[test]
+    fn window_keys_are_recognised() {
+        let w = |s: &str, mac: bool| Accelerator::parse(s).unwrap().used_by_window(mac);
+        for s in ["F2", "Enter", "Shift+Enter", "Delete", "Escape", "Space", "A", "Shift+F10", "Ctrl+E", "Ctrl+Comma"] {
+            assert!(w(s, false), "{s}");
+        }
+        for s in ["F13", "Numpad5", "Ctrl+Alt+F2", "Ctrl+Shift+F2", "Ctrl+K", "Alt+A", "Win+E"] {
+            assert!(!w(s, false), "{s}");
+        }
+        assert!(w("Win+E", true) && !w("Ctrl+E", true));
     }
 
     #[test]

@@ -234,6 +234,9 @@ pub struct SoundPatch {
     #[serde(default, deserialize_with = "double_option", skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable, as = "Option<PlayMode>")]
     pub mode: Option<Option<PlayMode>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub mute_voice: Option<bool>,
     #[serde(default, deserialize_with = "double_option", skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable, as = "Option<String>")]
     pub folder_id: Option<Option<String>>,

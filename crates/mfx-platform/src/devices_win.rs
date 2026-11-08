@@ -5,6 +5,7 @@
 
 use windows::Win32::Devices::FunctionDiscovery::PKEY_Device_FriendlyName;
 use windows::Win32::Foundation::PROPERTYKEY;
+use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
     DEVICE_STATE, DEVICE_STATE_ACTIVE, EDataFlow, ERole, IAudioClient, IMMDevice, IMMDeviceEnumerator,
     IMMNotificationClient, IMMNotificationClient_Impl, MMDeviceEnumerator, eCapture, eConsole, eRender,
@@ -13,7 +14,7 @@ use windows::Win32::System::Com::StructuredStorage::{PROPVARIANT, PropVariantCle
 use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, CoTaskMemFree, STGM_READ};
 use windows::Win32::System::Variant::{VT_BOOL, VT_EMPTY};
 use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
-use windows::core::{GUID, PCWSTR, implement};
+use windows::core::{GUID, HSTRING, PCWSTR, implement};
 
 /// Proprietà di "Ascolta questo dispositivo" sugli endpoint di cattura.
 /// pid 1 = attivo (VT_BOOL), pid 0 = ID dell'endpoint di riproduzione (VT_LPWSTR, vuoto = predefinito).
@@ -128,6 +129,21 @@ impl Devices {
             }
         }
         Ok(out)
+    }
+
+    /// Silenzia o riattiva un endpoint di cattura (lo stesso "Disattiva" delle impostazioni audio di
+    /// Windows: vale anche per "Ascolta questo dispositivo"). Restituisce lo stato di prima.
+    pub fn set_capture_mute(&self, id: &str, mute: bool) -> windows::core::Result<bool> {
+        // SAFETY: interfacce valide; nessun contesto evento (GUID nullo).
+        unsafe {
+            let dev = self.enumerator.GetDevice(&HSTRING::from(id))?;
+            let vol: IAudioEndpointVolume = dev.Activate(CLSCTX_ALL, None)?;
+            let was = vol.GetMute()?.as_bool();
+            if was != mute {
+                vol.SetMute(mute, std::ptr::null())?;
+            }
+            Ok(was)
+        }
     }
 
     /// Registra le notifiche di Windows. Restano attive finché il `Watcher` vive.

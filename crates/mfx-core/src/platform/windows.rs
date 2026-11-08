@@ -132,4 +132,9 @@ impl Platform for WindowsPlatform {
     fn discord_reader(&self) -> DiscordReader {
         Arc::new(mfx_platform::discord::read_voice_settings)
     }
+
+    fn set_mic_mute(&mut self, id: &str, mute: bool) -> Option<bool> {
+        let d = self.devices.as_ref()?;
+        d.set_capture_mute(id, mute).map_err(|e| tracing::warn!("mute del microfono non riuscito: {e}")).ok()
+    }
 }

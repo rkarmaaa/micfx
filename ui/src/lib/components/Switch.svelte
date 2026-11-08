@@ -13,7 +13,6 @@
   class="switch"
   aria-checked={checked}
   aria-label={label}
-  title={label}
   {disabled}
   onclick={() => onchange(!checked)}
 >

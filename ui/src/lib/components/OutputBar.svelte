@@ -7,7 +7,11 @@
   import { MAX_PERCENT, formatDb, percentToDb } from '../util/volume';
   import Switch from './Switch.svelte';
 
-  const DEFAULTS: Record<BusKind, number> = { monitor: 79, cable: 100 };
+  const DEFAULTS: Record<BusKind, number> = { monitor: 80, cable: 100 };
+  /** Gli slider si muovono a passi di 5 %; una tacca per passo, più marcate ogni 25 %. */
+  const STEP = 5;
+  const TICKS = Array.from({ length: MAX_PERCENT / STEP + 1 }, (_, i) => i * STEP);
+  const snap = (p: number) => Math.round(p / STEP) * STEP;
 
   const rows: { bus: BusKind; label: string; hint: string }[] = [
     { bus: 'monitor', label: 'Il mio volume', hint: 'Quello che senti tu in cuffia' },
@@ -28,7 +32,7 @@
   });
 
   function percent(bus: BusKind) {
-    return bus === 'monitor' ? app.monitorPercent : app.cablePercent;
+    return snap(bus === 'monitor' ? app.monitorPercent : app.cablePercent);
   }
 
   function deviceName(bus: BusKind): string {
@@ -45,14 +49,17 @@
 
   function wheel(bus: BusKind, e: WheelEvent) {
     e.preventDefault();
-    const step = e.shiftKey ? 1 : 5;
-    app.setVolume(bus, Math.max(0, Math.min(MAX_PERCENT, percent(bus) + (e.deltaY < 0 ? step : -step))));
+    app.setVolume(bus, Math.max(0, Math.min(MAX_PERCENT, percent(bus) + (e.deltaY < 0 ? STEP : -STEP))));
   }
 </script>
 
 <section class="dock" aria-label="Volumi" bind:this={dock}>
+  {#if app.settings && !app.settings.outputs.cable.enabled && !cableMissing}
+    <p class="note" role="status"><MicOff size={13} /> Microfono disattivato: i tuoi amici non sentono i suoni.</p>
+  {/if}
   <div class="rows">
-    {#each rows as r (r.bus)}
+    {#each rows as r, i (r.bus)}
+      {#if i > 0}<span class="sep" aria-hidden="true"></span>{/if}
       {@const enabled = app.settings?.outputs[r.bus].enabled ?? false}
       {@const unavailable = r.bus === 'cable' && cableMissing}
       {@const on = enabled && !unavailable}
@@ -67,7 +74,6 @@
             type="button"
             class="device"
             class:warn={unavailable}
-            title="{r.hint}. Clic per scegliere il dispositivo."
             onclick={() => (unavailable ? (app.guideOpen = true) : app.openSettings('audio'))}
           >
             {#if unavailable}<TriangleAlert size={12} />{/if}
@@ -81,45 +87,62 @@
           label={enabled ? `Disattiva: ${r.hint.toLowerCase()}` : `Attiva: ${r.hint.toLowerCase()}`}
           onchange={(v) => app.setOutputEnabled(r.bus, v)}
         />
-        <input
-          type="range"
-          min="0"
-          max={MAX_PERCENT}
-          step="1"
-          value={p}
-          disabled={unavailable}
-          aria-label={r.label}
-          aria-valuetext="{p}% ({formatDb(percentToDb(p))})"
-          title="{formatDb(percentToDb(p))} · oltre 100% amplifica · rotellina per regolare, doppio clic per {DEFAULTS[r.bus]}%"
-          style:--fill="{(p / MAX_PERCENT) * 100}%"
-          oninput={(e) => app.setVolume(r.bus, +e.currentTarget.value)}
-          onwheel={(e) => wheel(r.bus, e)}
-          ondblclick={() => app.setVolume(r.bus, DEFAULTS[r.bus])}
-        />
+        <div class="slider">
+          <input
+            type="range"
+            min="0"
+            max={MAX_PERCENT}
+            step={STEP}
+            value={p}
+            disabled={unavailable}
+            aria-label={r.label}
+            aria-valuetext="{p}% ({formatDb(percentToDb(p))})"
+            style:--fill="{(p / MAX_PERCENT) * 100}%"
+            oninput={(e) => app.setVolume(r.bus, +e.currentTarget.value)}
+            onwheel={(e) => wheel(r.bus, e)}
+            ondblclick={() => app.setVolume(r.bus, DEFAULTS[r.bus])}
+          />
+          <span class="ticks" aria-hidden="true">
+            {#each TICKS as t (t)}<i class:major={t % 25 === 0} class:unity={t === 100} class:on={t <= p}></i>{/each}
+          </span>
+        </div>
         <output class="value" class:boost={p > 100}>{p}%</output>
       </div>
     {/each}
   </div>
-  {#if app.settings && !app.settings.outputs.cable.enabled && !cableMissing}
-    <p class="note"><MicOff size={13} /> Microfono disattivato: i tuoi amici non sentono i suoni.</p>
-  {/if}
 </section>
 
 <style>
   .dock {
+    container: dock / inline-size;
+    position: relative;
     flex: none;
-    padding: 10px 16px 12px;
+    /* Lati come la barra superiore. */
+    padding: 10px 10px 12px;
     border-top: 1px solid var(--border);
     background: var(--surface);
   }
   .rows {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-    gap: 8px 28px;
+    grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 24px;
+  }
+  .sep {
+    align-self: stretch;
+    background: var(--border);
+  }
+  @container dock (max-width: 820px) {
+    .rows {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .sep {
+      height: 1px;
+    }
   }
   .row {
     display: grid;
-    grid-template-columns: 34px minmax(110px, 190px) auto minmax(80px, 1fr) 44px;
+    grid-template-columns: 34px minmax(96px, 150px) auto minmax(80px, 1fr) 44px;
     align-items: center;
     gap: 12px;
     min-width: 0;
@@ -179,8 +202,45 @@
   .off .label {
     opacity: 0.5;
   }
+  .slider {
+    position: relative;
+    min-width: 0;
+  }
+  /* Il cursore sta sopra le tacche: il pomello le copre quando ci passa. */
   input[type='range'] {
+    position: relative;
+    z-index: 1;
+    display: block;
     width: 100%;
+  }
+  /* Tacche sotto la traccia, allineate alle posizioni del cursore (metà pomello per lato). */
+  .ticks {
+    position: absolute;
+    top: calc(50% + 5px);
+    left: 8px;
+    right: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+  }
+  .ticks i {
+    width: 1px;
+    height: 3px;
+    background: var(--tick);
+  }
+  .ticks i.major {
+    height: 5px;
+    background: var(--tick-major);
+  }
+  .ticks i.unity {
+    height: 6px;
+  }
+  .ticks i.on {
+    background: var(--tick-on);
+  }
+  .off .ticks {
+    opacity: 0.5;
   }
   .value {
     color: var(--fg-2);
@@ -192,12 +252,30 @@
   .value.boost {
     color: var(--warn);
   }
+  /* Sopra la barra, fuori dal flusso: comparire o sparire non sposta niente. */
   .note {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 10px;
+    z-index: 5;
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 8px;
+    max-width: calc(100% - 20px);
+    padding: 6px 10px;
+    border: 1px solid var(--warn-border);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    box-shadow: var(--shadow-md);
     color: var(--warn);
     font-size: var(--text-sm);
+    pointer-events: none;
+    animation: note-in var(--t-med) var(--ease);
+  }
+  @keyframes note-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
   }
 </style>

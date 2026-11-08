@@ -10,7 +10,11 @@ file: string, channels: number, frames: number, loudness_gain_db: number, user_g
 /**
  * `null` = segue `settings.playback.default_mode`.
  */
-mode: PlayMode | null, folder_id: string | null, tags: Array<string>, source: SoundSource, 
+mode: PlayMode | null, 
+/**
+ * Durante la riproduzione la voce del microfono non arriva agli altri: sentono solo il suono.
+ */
+mute_voice: boolean, folder_id: string | null, tags: Array<string>, source: SoundSource, 
 /**
  * Oggetto opaco della UI (emoji, ordine nella griglia, ...). Il core non lo interpreta.
  */

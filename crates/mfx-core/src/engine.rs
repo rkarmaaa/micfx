@@ -157,6 +157,10 @@ pub struct Engine {
     next_hotkey_id: i32,
     hotkeys_paused: bool,
     ptt_down: Option<u16>,
+    /// Voce silenziata perché suona un effetto con `mute_voice`.
+    voice_muted: bool,
+    /// Microfoni silenziati da MicFX (modo Sistema), da riattivare quando la voce torna.
+    muted_mics: Vec<String>,
     timers: Timers,
     ui_open: bool,
     trash: Vec<TrashEntry>,
@@ -246,6 +250,8 @@ impl Engine {
             next_hotkey_id: 1,
             hotkeys_paused: false,
             ptt_down: None,
+            voice_muted: false,
+            muted_mics: Vec::new(),
             timers: Timers::default(),
             ui_open: false,
             trash: Vec::new(),
@@ -259,6 +265,7 @@ impl Engine {
             discord_again: false,
         };
         e.recover_orphans();
+        e.restore_mics_after_crash();
         if config_dirty {
             e.schedule_config_save();
         }
@@ -828,6 +835,7 @@ impl Engine {
         };
         let playing = playing_of(play_id, &p);
         self.plays.insert(play_id, p);
+        self.update_voice_mute();
         self.emit(CoreEvent::PlaybackStarted(playing));
         Ok(Some(play_id))
     }
@@ -863,6 +871,9 @@ impl Engine {
         if finished && let Some(p) = self.plays.remove(&play_id) {
             self.emit(CoreEvent::PlaybackEnded(PlaybackEnded { play_id, sound_id: p.sound_id }));
         }
+        if kind == BusKind::Cable {
+            self.update_voice_mute();
+        }
         if kind == BusKind::Cable && self.ptt_down.is_some() && !self.cable_playing() {
             self.timers.ptt_release = Some(Instant::now() + Duration::from_millis(self.settings.ptt.tail_ms as u64));
         }
@@ -873,6 +884,67 @@ impl Engine {
 
     fn cable_playing(&self) -> bool {
         self.plays.values().any(|p| p.pending.contains(&BusKind::Cable))
+    }
+
+    // ------------------------------------------------------------------ "Disattiva la mia voce"
+
+    /// La voce va silenziata finché nel cavo suona almeno un effetto con `mute_voice`. L'opzione si
+    /// legge dal suono a ogni controllo: cambiarla mentre suona ha effetto subito.
+    fn update_voice_mute(&mut self) {
+        let want = self.plays.values().any(|p| {
+            p.pending.contains(&BusKind::Cable) && self.index.sound(&p.sound_id).is_some_and(|s| s.mute_voice)
+        });
+        if want == self.voice_muted {
+            return;
+        }
+        self.voice_muted = want;
+        // Modo Bridge (macOS): la voce passa dall'app, basta azzerarla.
+        self.platform.set_bridge_muted(want);
+        if !want {
+            self.unmute_mics();
+            return;
+        }
+        // Modo Sistema: Windows manda il microfono nel cavo da sé, quindi si silenzia il microfono.
+        // Solo quelli che MicFX trova attivi: chi era già muto resta com'era alla fine.
+        let routed: Vec<String> = self.mics.iter().filter(|m| m.routed_to_cable).map(|m| m.id.clone()).collect();
+        for id in routed {
+            if self.platform.set_mic_mute(&id, true) == Some(false) {
+                self.muted_mics.push(id);
+            }
+        }
+        if !self.muted_mics.is_empty() {
+            // Se MicFX si chiude prima di riattivarli, al prossimo avvio si riattivano da qui.
+            match serde_json::to_vec(&self.muted_mics) {
+                Ok(bytes) => {
+                    if let Err(e) = persist::write_atomic(&self.paths.muted_mics_file(), &bytes) {
+                        tracing::warn!("elenco microfoni silenziati non salvato: {e}");
+                    }
+                }
+                Err(e) => tracing::warn!("elenco microfoni silenziati: {e}"),
+            }
+        }
+    }
+
+    fn unmute_mics(&mut self) {
+        if self.muted_mics.is_empty() {
+            return;
+        }
+        for id in std::mem::take(&mut self.muted_mics) {
+            if self.platform.set_mic_mute(&id, false).is_none() {
+                tracing::warn!("microfono {id} non riattivato");
+            }
+        }
+        let _ = std::fs::remove_file(self.paths.muted_mics_file());
+    }
+
+    fn restore_mics_after_crash(&mut self) {
+        let path = self.paths.muted_mics_file();
+        let Ok(bytes) = std::fs::read(&path) else { return };
+        let ids: Vec<String> = serde_json::from_slice(&bytes).unwrap_or_default();
+        tracing::info!("riattivo {} microfoni silenziati prima della chiusura", ids.len());
+        self.muted_mics = ids;
+        self.unmute_mics();
+        let _ = std::fs::remove_file(path);
     }
 
     // ------------------------------------------------------------------ PTT (SPEC §8.2)
@@ -1330,6 +1402,10 @@ impl Engine {
         if let Some(m) = patch.mode {
             s.mode = m;
         }
+        let mute_changed = patch.mute_voice.is_some_and(|v| v != s.mute_voice);
+        if let Some(v) = patch.mute_voice {
+            s.mute_voice = v;
+        }
         if let Some(f) = patch.folder_id {
             s.folder_id = f;
         }
@@ -1354,6 +1430,9 @@ impl Engine {
         }
         let out = s.clone();
         self.schedule_index_save();
+        if mute_changed {
+            self.update_voice_mute();
+        }
         self.library_changed(Vec::new(), vec![out.clone()], Vec::new());
         Ok(out)
     }
@@ -1588,6 +1667,7 @@ impl Engine {
                         loudness_gain_db: n.loudness_gain_db,
                         user_gain_db: 0.0,
                         mode: None,
+                        mute_voice: false,
                         folder_id,
                         tags: Vec::new(),
                         source: n.source,
@@ -1686,6 +1766,7 @@ impl Engine {
                 loudness_gain_db: 0.0,
                 user_gain_db: 0.0,
                 mode: None,
+                mute_voice: false,
                 folder_id: None,
                 tags: Vec::new(),
                 source: SoundSource::default(),
@@ -1716,6 +1797,7 @@ impl Engine {
             }
         }
         self.plays.clear();
+        self.update_voice_mute();
         self.purge_trash(true);
         self.save_config_now();
         if self.index_trusted || !self.index.sounds.is_empty() {

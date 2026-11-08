@@ -2,6 +2,7 @@
 //! del microfono.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossbeam_channel::Sender;
 use mfx_audio::bridge::MicBridge;
@@ -21,6 +22,8 @@ pub struct MacPlatform {
     _watcher: Option<Watcher>,
     hotkeys: Option<HotkeyService>,
     bridge: Option<(MicRoute, MicBridge)>,
+    /// Condiviso con ogni bridge: un bridge riaperto durante un suono resta muto.
+    voice_muted: Arc<AtomicBool>,
 }
 
 impl MacPlatform {
@@ -52,7 +55,7 @@ impl MacPlatform {
             .map_err(|e| tracing::error!("servizio hotkey non avviato: {e}"))
             .ok()
         };
-        Self { devices, _watcher: watcher, hotkeys, bridge: None }
+        Self { devices, _watcher: watcher, hotkeys, bridge: None, voice_muted: Arc::new(AtomicBool::new(false)) }
     }
 }
 
@@ -145,12 +148,16 @@ impl Platform for MacPlatform {
             tracing::info!("bridge microfono spento");
             return;
         };
-        match MicBridge::start(route.mic_id.as_deref(), &route.cable_id) {
+        match MicBridge::start(route.mic_id.as_deref(), &route.cable_id, self.voice_muted.clone()) {
             Ok(b) => {
                 tracing::info!("bridge microfono: «{}» → cavo", b.mic_name);
                 self.bridge = Some((route, b));
             }
             Err(e) => tracing::warn!("bridge microfono non avviato: {e}"),
         }
+    }
+
+    fn set_bridge_muted(&mut self, muted: bool) {
+        self.voice_muted.store(muted, Ordering::Relaxed);
     }
 }

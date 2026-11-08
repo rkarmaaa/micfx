@@ -34,6 +34,7 @@ let sounds: Sound[] = Array.from({ length: N }, (_, i) => {
     loudness_gain_db: -3.2,
     user_gain_db: 0,
     mode: i === 3 ? 'toggle' : i === 5 ? 'restart' : null,
+    mute_voice: i === 2,
     folder_id: i % 4 === 0 ? 'f1' : i % 4 === 1 ? 'f2' : null,
     tags: [],
     source: { path: `C:\\Users\\Marco\\Downloads\\${name}.mp3`, xxh3: `${i}` },
@@ -119,6 +120,7 @@ mockIPC(
         if (p.name) s.name = p.name;
         if (p.ui) s.ui = { ...s.ui, ...p.ui };
         if ('mode' in p) s.mode = p.mode;
+        if (p.mute_voice !== undefined) s.mute_voice = p.mute_voice;
         if (p.user_gain_db !== undefined) s.user_gain_db = p.user_gain_db;
         libraryChanged([], [{ ...s }]);
         return s;

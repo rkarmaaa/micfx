@@ -71,4 +71,10 @@ pub trait Platform {
     fn discord_reader(&self) -> DiscordReader;
     /// Accende, sposta o spegne (`None`) il bridge del microfono. Le piattaforme senza bridge ignorano.
     fn set_mic_bridge(&mut self, _route: Option<MicRoute>) {}
+    /// Azzera (con una rampa breve) o ridà la voce nel bridge. Le piattaforme senza bridge ignorano.
+    fn set_bridge_muted(&mut self, _muted: bool) {}
+    /// Silenzia o riattiva un microfono di sistema. Restituisce lo stato di prima, `None` se non riesce.
+    fn set_mic_mute(&mut self, _id: &str, _mute: bool) -> Option<bool> {
+        None
+    }
 }

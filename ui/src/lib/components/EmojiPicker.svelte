@@ -309,7 +309,6 @@
         class="tone-btn emoji-font"
         aria-haspopup="true"
         aria-expanded={toneOpen}
-        title="Tono della pelle: {SKIN_TONE_LABELS[tone]}"
         aria-label="Tono della pelle: {SKIN_TONE_LABELS[tone]}"
         onclick={() => (toneOpen = !toneOpen)}>{TONES[tone]}</button
       >
@@ -321,7 +320,6 @@
               role="radio"
               class="emoji-font"
               aria-checked={tone === i}
-              title={SKIN_TONE_LABELS[i]}
               aria-label={SKIN_TONE_LABELS[i]}
               onclick={() => {
                 app.setPrefs({ skinTone: i });
@@ -338,7 +336,7 @@
     {#if data}
       {#each sections.filter((s) => s.icon) as s (s.key)}
         {@const Icon = s.icon!}
-        <button type="button" class:on={!query && inView === s.key} title={s.label} aria-label={s.label} onclick={() => jump(s.key)}>
+        <button type="button" class:on={!query && inView === s.key} aria-label={s.label} onclick={() => jump(s.key)}>
           <Icon size={17} />
         </button>
       {/each}

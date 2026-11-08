@@ -476,6 +476,11 @@ class AppStore {
     await api.updateSound(id, { user_gain_db: db }).catch((e) => fail(e));
   }
 
+  async setMuteVoice(id: string, mute_voice: boolean) {
+    this.patchLocal(id, (x) => ({ ...x, mute_voice }));
+    await api.updateSound(id, { mute_voice }).catch((e) => fail(e));
+  }
+
   async setMode(id: string, mode: PlayMode | null) {
     this.patchLocal(id, (x) => ({ ...x, mode }));
     await api.updateSound(id, { mode }).catch((e) => fail(e));

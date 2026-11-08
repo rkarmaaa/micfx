@@ -85,6 +85,12 @@ impl Paths {
         self.local.join("library")
     }
 
+    /// Microfoni silenziati da "Disattiva la mia voce": se il file c'è all'avvio, MicFX si è chiuso
+    /// prima di riattivarli.
+    pub fn muted_mics_file(&self) -> PathBuf {
+        self.roaming.join("muted-mics.json")
+    }
+
     pub fn index_file(&self) -> PathBuf {
         self.library_dir().join("index.json")
     }

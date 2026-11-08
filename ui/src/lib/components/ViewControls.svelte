@@ -24,12 +24,12 @@
 
 <div class="controls">
   {#if app.prefs.view === 'grid'}
-    <Select size="sm" class="size" label="Dimensione riquadri" title="Dimensione riquadri" value={app.prefs.size} options={SIZES} onchange={(v) => app.setPrefs({ size: v })} />
+    <Select size="sm" class="size" label="Dimensione riquadri" value={app.prefs.size} options={SIZES} onchange={(v) => app.setPrefs({ size: v })} />
   {/if}
-  <Select size="sm" label="Ordina per" title="Ordina per" value={app.prefs.sort} options={SORTS} onchange={(v) => app.setPrefs({ sort: v })} />
+  <Select size="sm" label="Ordina per" value={app.prefs.sort} options={SORTS} onchange={(v) => app.setPrefs({ sort: v })} />
   <div class="seg" role="radiogroup" aria-label="Vista">
     {#each VIEWS as { v, label, icon: Icon } (v)}
-      <button type="button" role="radio" aria-checked={app.prefs.view === v} title={label} aria-label={label} onclick={() => app.setPrefs({ view: v })}>
+      <button type="button" role="radio" aria-checked={app.prefs.view === v} aria-label={label} onclick={() => app.setPrefs({ view: v })}>
         <Icon size={16} />
       </button>
     {/each}

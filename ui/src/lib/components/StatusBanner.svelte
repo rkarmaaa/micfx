@@ -46,7 +46,7 @@
       {:else}
         <button type="button" class="sm" onclick={() => api.openSoundSettings(0)}>Apri impostazioni audio</button>
       {/if}
-      <button type="button" class="icon sm" title="Nascondi fino al prossimo avvio" aria-label="Nascondi avviso" onclick={() => (dismissed = [...dismissed, code])}
+      <button type="button" class="icon sm" aria-label="Nascondi avviso" onclick={() => (dismissed = [...dismissed, code])}
         ><X size={15} /></button
       >
     </div>

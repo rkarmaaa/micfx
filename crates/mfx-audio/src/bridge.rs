@@ -14,6 +14,8 @@
 
 use std::ffi::c_void;
 use std::ptr;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -27,6 +29,8 @@ const TARGET_FRAMES: usize = SAMPLE_RATE as usize / 50;
 const MAX_FRAMES: usize = TARGET_FRAMES * 4;
 /// Frame massimi per callback di cattura (buffer preallocato).
 const CAPTURE_MAX_FRAMES: usize = 8192;
+/// Rampa del mute della voce: 10 ms, niente click.
+const MUTE_STEP: f32 = 1.0 / (SAMPLE_RATE as f32 / 100.0);
 
 pub struct MicBridge {
     input: AudioUnit,
@@ -50,6 +54,9 @@ struct CaptureState {
 struct PlayState {
     rx: Consumer<f32>,
     priming: bool,
+    /// "Disattiva la mia voce": la voce scende a zero mentre suona l'effetto.
+    muted: Arc<AtomicBool>,
+    gain: f32,
 }
 
 /// Interpolazione lineare a passo fisso: `step` = frequenza d'ingresso / 48000.
@@ -77,8 +84,9 @@ impl Resampler {
 }
 
 impl MicBridge {
-    /// Avvia il bridge. `mic_uid = None` = microfono predefinito di macOS.
-    pub fn start(mic_uid: Option<&str>, cable_uid: &str) -> Result<Self, String> {
+    /// Avvia il bridge. `mic_uid = None` = microfono predefinito di macOS. Con `muted` a `true` la
+    /// voce non passa (rampa di 10 ms).
+    pub fn start(mic_uid: Option<&str>, cable_uid: &str, muted: Arc<AtomicBool>) -> Result<Self, String> {
         let cable = coreaudio::device_by_uid(cable_uid).ok_or("cavo virtuale non trovato")?;
         let mic = match mic_uid {
             Some(uid) => coreaudio::device_by_uid(uid),
@@ -98,7 +106,8 @@ impl MicBridge {
             rs: Resampler::new(in_rate),
             tx,
         }));
-        let play = Box::into_raw(Box::new(PlayState { rx, priming: true }));
+        let gain = if muted.load(Ordering::Relaxed) { 0.0 } else { 1.0 };
+        let play = Box::into_raw(Box::new(PlayState { rx, priming: true, muted, gain }));
         let mut b = Self {
             input: ptr::null_mut(),
             output: ptr::null_mut(),
@@ -274,12 +283,45 @@ unsafe extern "C" fn play_cb(
         out[take..].fill(0.0);
         st.priming = true;
     }
+    apply_mute(&mut out[..take], &mut st.gain, st.muted.load(Ordering::Relaxed));
     0
+}
+
+/// Porta la voce verso 0 (muto) o 1 con una rampa lineare per frame.
+#[inline]
+fn apply_mute(out: &mut [f32], gain: &mut f32, muted: bool) {
+    let target = if muted { 0.0 } else { 1.0 };
+    if *gain == target {
+        if muted {
+            out.fill(0.0);
+        }
+        return;
+    }
+    for f in out.chunks_exact_mut(CHANNELS) {
+        *gain = if muted { (*gain - MUTE_STEP).max(0.0) } else { (*gain + MUTE_STEP).min(1.0) };
+        for s in f {
+            *s *= *gain;
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mute_ramp() {
+        let mut g = 1.0;
+        let mut buf = vec![1.0f32; SAMPLE_RATE as usize / 50 * CHANNELS];
+        apply_mute(&mut buf, &mut g, true);
+        assert_eq!(g, 0.0);
+        assert!(buf[0] > 0.9 && *buf.last().unwrap() == 0.0);
+        let mut buf = vec![1.0f32; 64];
+        apply_mute(&mut buf, &mut g, true);
+        assert!(buf.iter().all(|s| *s == 0.0));
+        apply_mute(&mut buf, &mut g, false);
+        assert!(g > 0.0);
+    }
 
     #[test]
     fn resampler_counts() {

@@ -7,6 +7,7 @@
   import HotkeyInput from './HotkeyInput.svelte';
   import Modal from './Modal.svelte';
   import Select from './Select.svelte';
+  import Switch from './Switch.svelte';
 
   let { id, onclose }: { id: string; onclose: () => void } = $props();
 
@@ -58,7 +59,7 @@
 {#if s}
   <Modal title="Modifica suono" {onclose} side width={420}>
     <div class="head">
-      <button type="button" class="emoji-btn emoji-font" title={kb('Cambia emoji (Ctrl+E)')} aria-label="Cambia emoji" onclick={openEmoji}>
+      <button type="button" class="emoji-btn emoji-font" aria-label="Cambia emoji" onclick={openEmoji}>
         {soundEmoji(s)}
       </button>
       <label class="name">
@@ -80,7 +81,7 @@
 
     <div class="row">
       <button type="button" class="primary" onclick={() => app.play(s.id)}><Play size={15} fill="currentColor" /> Riproduci</button>
-      <button type="button" onclick={() => app.preview(s.id)} title="Solo in cuffia, Discord non lo sente"><Headphones size={15} /> Ascolta solo tu</button>
+      <button type="button" onclick={() => app.preview(s.id)}><Headphones size={15} /> Ascolta solo tu</button>
       {#if app.playingBySound.has(s.id)}
         <button type="button" class="danger" onclick={() => app.stop(s.id)}><Square size={13} fill="currentColor" /> Ferma</button>
       {/if}
@@ -110,6 +111,14 @@
         <output>{gain > 0 ? '+' : ''}{gain.toFixed(1)} dB</output>
         <button type="button" class="link" disabled={gain === 0} onclick={() => setGain(0)}>Ripristina</button>
       </div>
+    </fieldset>
+
+    <fieldset class="toggle">
+      <div class="text">
+        <span class="t">Disattiva la mia voce durante la riproduzione</span>
+        <p class="help">Finché suona, gli altri sentono solo l'effetto, non il tuo microfono.</p>
+      </div>
+      <Switch checked={s.mute_voice} label="Disattiva la mia voce durante la riproduzione" onchange={(v) => app.setMuteVoice(s.id, v)} />
     </fieldset>
 
     <fieldset>
@@ -144,7 +153,7 @@
       <dd>{s.loudness_gain_db > 0 ? '+' : ''}{s.loudness_gain_db.toFixed(1)} dB automatici</dd>
       {#if s.source.path}
         <dt>File originale</dt>
-        <dd class="path selectable" title={s.source.path}>{s.source.path}</dd>
+        <dd class="path selectable">{s.source.path}</dd>
       {/if}
       <dt>Aggiunto</dt>
       <dd>{new Date(s.created_at).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' })}</dd>
@@ -222,6 +231,27 @@
   }
   legend + :not(.help) {
     clear: both;
+  }
+  .toggle {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .toggle .text {
+    flex: 1;
+    min-width: 0;
+  }
+  .toggle .t {
+    display: block;
+    margin-bottom: 4px;
+    font-size: var(--text-md);
+    font-weight: 600;
+  }
+  .toggle .help {
+    margin: 0;
+  }
+  .toggle :global(.switch) {
+    margin-top: 1px;
   }
   .gain {
     display: flex;

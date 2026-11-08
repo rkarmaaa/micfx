@@ -34,7 +34,7 @@
           >
         {/each}
         {#if t.kind !== 'progress'}
-          <button type="button" class="icon" aria-label="Chiudi notifica" title="Chiudi" onclick={() => toasts.dismiss(t.id)}><X size={15} /></button>
+          <button type="button" class="icon" aria-label="Chiudi notifica" onclick={() => toasts.dismiss(t.id)}><X size={15} /></button>
         {/if}
       </div>
       {#if t.lines?.length}

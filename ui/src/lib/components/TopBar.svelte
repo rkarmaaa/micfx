@@ -42,7 +42,6 @@
         type="button"
         class="clear"
         aria-label="Cancella ricerca"
-        title="Cancella (Esc)"
         onclick={() => {
           app.search = '';
           searchInput?.focus();
@@ -56,7 +55,7 @@
   <span class="spacer"></span>
 
   {#if app.hotkeysPaused}
-    <button type="button" class="paused" title="Le scorciatoie globali sono in pausa. Clic per riattivarle." onclick={() => app.togglePause()}>
+    <button type="button" class="paused" onclick={() => app.togglePause()}>
       <Pause size={14} /><span class="label">Scorciatoie in pausa</span>
     </button>
   {/if}
@@ -66,7 +65,6 @@
     class="stop"
     class:live={playingCount > 0}
     disabled={playingCount === 0}
-    title="Ferma tutti i suoni (Esc)"
     aria-label="Ferma tutti i suoni"
     onclick={() => app.stopAll()}
   >
@@ -74,16 +72,16 @@
     <span class="label">Ferma tutto</span>
     {#if playingCount > 1}<span class="count">{playingCount}</span>{/if}
   </button>
-  <button type="button" class="primary add" title={kb('Importa file audio (Ctrl+O)')} onclick={() => app.pickAndImport()}>
+  <button type="button" class="primary add" onclick={() => app.pickAndImport()}>
     <Plus size={16} strokeWidth={2.4} /><span class="label">Aggiungi suoni</span>
   </button>
 
   <span class="divider" aria-hidden="true"></span>
 
-  <button type="button" class="tool" title="Guida configurazione Discord" aria-label="Guida configurazione" onclick={() => (app.guideOpen = true)}>
+  <button type="button" class="tool" aria-label="Guida configurazione" onclick={() => (app.guideOpen = true)}>
     <CircleHelp size={18} />
   </button>
-  <button type="button" class="tool" title={kb('Impostazioni (Ctrl+,)')} aria-label="Impostazioni" onclick={() => app.openSettings()}>
+  <button type="button" class="tool" aria-label="Impostazioni" onclick={() => app.openSettings()}>
     <Settings size={18} />
   </button>
 </header>

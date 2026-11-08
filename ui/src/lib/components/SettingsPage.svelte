@@ -163,10 +163,10 @@
 
 <div class="page">
   <header class="bar">
-    <button type="button" class="back" title="Torna ai suoni (Esc)" aria-label="Torna ai suoni" onclick={onclose}><ArrowLeft size={18} /></button>
+    <button type="button" class="back" aria-label="Torna ai suoni" onclick={onclose}><ArrowLeft size={18} /></button>
     <h1>Impostazioni</h1>
     <span class="spacer"></span>
-    <button type="button" class="close" title="Chiudi (Esc)" aria-label="Chiudi le impostazioni" onclick={onclose}><X size={18} /></button>
+    <button type="button" class="close" aria-label="Chiudi le impostazioni" onclick={onclose}><X size={18} /></button>
   </header>
 
   <div class="body">
@@ -343,7 +343,6 @@
                     type="button"
                     class="icon"
                     aria-label="Rimuovi tasto"
-                    title="Rimuovi tasto"
                     onclick={() => app.updateSettings({ ptt: { key: null, enabled: false } })}><X size={15} /></button
                   >
                 {/if}
@@ -496,7 +495,7 @@
             <div class="row">
               <div class="text">
                 <span class="t">Cartella della libreria</span>
-                <span class="d path selectable" title={app.info?.library_dir}>{app.info?.library_dir}</span>
+                <span class="d path selectable">{app.info?.library_dir}</span>
               </div>
               <button type="button" class="ctl" onclick={() => api.openDataFolder()}><FolderOpen size={15} /> Apri cartella</button>
             </div>
@@ -518,7 +517,7 @@
                       <tr>
                         <td>{b.bus === 'cable' ? 'Microfono' : 'Cuffie'}</td>
                         <td><span class="state" class:ok={b.state === 'running'}>{b.state}</span></td>
-                        <td class="dev" title={b.device}>{b.device || '—'}</td>
+                        <td class="dev">{b.device || '—'}</td>
                         <td>{b.voices}</td>
                         <td class:bad={b.underruns > 0}>{b.underruns}</td>
                         <td class:bad={b.errors > 0}>{b.errors}</td>

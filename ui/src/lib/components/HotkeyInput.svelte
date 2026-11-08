@@ -104,13 +104,13 @@
       <span class="hint">{partial || 'Premi la combinazione…'}</span>
     {:else if current}
       <kbd>{formatAccelerator(current.accelerator)}</kbd>
-      {#if current.conflict}<span class="badge" title="Usata da un'altra app: non funziona"><TriangleAlert size={14} /></span>{/if}
+      {#if current.conflict}<span class="badge"><TriangleAlert size={14} /></span>{/if}
     {:else}
       <span class="none">Nessuna</span>
     {/if}
   </button>
   {#if current && !capturing}
-    <button type="button" class="icon" title="Rimuovi scorciatoia" aria-label="Rimuovi scorciatoia" onclick={() => commit(null)}><X size={15} /></button>
+    <button type="button" class="icon" aria-label="Rimuovi scorciatoia" onclick={() => commit(null)}><X size={15} /></button>
   {:else}
     <!-- Stesso ingombro con e senza scorciatoia: i campi restano allineati in colonna. -->
     <span class="x-space" aria-hidden="true"></span>

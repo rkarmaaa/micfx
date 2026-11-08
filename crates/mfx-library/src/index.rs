@@ -51,6 +51,9 @@ pub struct Sound {
     /// `null` = segue `settings.playback.default_mode`.
     #[serde(default)]
     pub mode: Option<PlayMode>,
+    /// Durante la riproduzione la voce del microfono non arriva agli altri: sentono solo il suono.
+    #[serde(default)]
+    pub mute_voice: bool,
     #[serde(default)]
     pub folder_id: Option<String>,
     #[serde(default)]

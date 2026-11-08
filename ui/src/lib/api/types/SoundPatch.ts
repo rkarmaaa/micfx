@@ -5,4 +5,4 @@ import type { PlayMode } from "./PlayMode";
  * Campi assenti = invariati. `mode: null` = segui il predefinito; `folder_id: null` = radice.
  * `ui` viene unito in superficie: le chiavi a `null` vengono rimosse.
  */
-export type SoundPatch = { name?: string, user_gain_db?: number, mode?: PlayMode | null, folder_id?: string | null, tags?: Array<string>, ui?: Record<string, unknown>, };
+export type SoundPatch = { name?: string, user_gain_db?: number, mode?: PlayMode | null, mute_voice?: boolean, folder_id?: string | null, tags?: Array<string>, ui?: Record<string, unknown>, };

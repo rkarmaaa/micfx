@@ -69,7 +69,7 @@
   >
     <header>
       <h2>{title}</h2>
-      <button class="close icon" type="button" aria-label="Chiudi" title="Chiudi (Esc)" onclick={onclose}><X size={18} /></button>
+      <button class="close icon" type="button" aria-label="Chiudi" onclick={onclose}><X size={18} /></button>
     </header>
     <div class="body">{@render children()}</div>
     {#if footer}

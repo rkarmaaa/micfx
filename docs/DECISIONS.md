@@ -66,6 +66,12 @@ Scelte prese durante lo sviluppo, rispetto a [SPEC.md](SPEC.md). Le più recenti
   di configurazione si spunta da sola mentre l'utente cambia le impostazioni di Windows.
 - "Volume microfono" nella UI è il volume dei **suoni** mandati nel microfono virtuale (quello che sentono gli
   altri), non il volume della voce: in modo Sistema l'app non tocca il microfono.
+- Eccezione: l'opzione per suono **"Disattiva la mia voce durante la riproduzione"** (`Sound.mute_voice`,
+  anticipa il ducking della SPEC §6.6). Finché nel cavo suona un effetto con l'opzione, l'engine silenzia con
+  `IAudioEndpointVolume::SetMute` i microfoni che "Ascoltano" verso CABLE Input, solo quelli non già muti, e li
+  riattiva a fine suono. Gli ID silenziati stanno in `%APPDATA%\MicFX\muted-mics.json` finché non tornano
+  attivi: dopo un crash l'avvio successivo li riattiva. Su Mac il bridge azzera la voce con una rampa di 10 ms.
+  L'anteprima (solo cuffia) non tocca la voce.
 
 ## Ancora da misurare (Fase 0 / Fase 5)
 

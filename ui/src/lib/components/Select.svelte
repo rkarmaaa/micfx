@@ -13,7 +13,6 @@
     class: cls = '',
     size = 'md',
     label,
-    title,
     disabled = false,
   }: {
     value: T;
@@ -23,7 +22,6 @@
     size?: 'sm' | 'md';
     /** Nome accessibile, se non c'è un'etichetta visibile. */
     label?: string;
-    title?: string;
     disabled?: boolean;
   } = $props();
 
@@ -174,7 +172,6 @@
   aria-controls={open ? `${uid}-list` : undefined}
   aria-activedescendant={open && active >= 0 ? `${uid}-${active}` : undefined}
   aria-label={label}
-  {title}
   {disabled}
   onclick={() => (open ? close() : show())}
   {onkeydown}

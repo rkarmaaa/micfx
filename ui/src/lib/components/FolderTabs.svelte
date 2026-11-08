@@ -211,7 +211,6 @@
         tabindex={app.prefs.folder === f.id ? 0 : -1}
         class:drop={dropTarget === f.id}
         data-folder-drop={f.id}
-        title="{f.name} · doppio clic per rinominare · clic destro per altre azioni"
         onclick={() => app.setPrefs({ folder: f.id })}
         ondblclick={() => (renaming = f.id)}
         oncontextmenu={(e) => {
@@ -258,7 +257,7 @@
       onblur={(e) => void finishAdd(e.currentTarget.value)}
     />
   {:else}
-    <button type="button" class="add" title="Nuova cartella" onclick={() => (adding = true)}><Plus size={15} /> Nuova cartella</button>
+    <button type="button" class="add" onclick={() => (adding = true)}><Plus size={15} /> Nuova cartella</button>
   {/if}
 </div>
 

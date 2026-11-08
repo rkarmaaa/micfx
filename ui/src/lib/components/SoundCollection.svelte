@@ -309,7 +309,7 @@
   .collection.list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
     padding-inline: 12px;
   }
   .ghost {

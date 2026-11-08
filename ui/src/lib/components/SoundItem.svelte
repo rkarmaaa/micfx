@@ -94,7 +94,6 @@
   aria-selected={selected}
   aria-label="{sound.name}{hotkey ? `, scorciatoia ${formatAccelerator(hotkey.accelerator)}` : ''}{playing ? ', in riproduzione' : ''}"
   tabindex={focused ? 0 : -1}
-  title={renaming ? undefined : `${sound.name}\nClic: riproduci · Clic destro: altre azioni`}
 >
   {#if playing}
     <!-- Ritaglio a parte: il riquadro resta overflow visibile, altrimenti la griglia con
@@ -124,26 +123,26 @@
 
   {#if view === 'list'}
     <span class="meta duration">{playing ? `−${formatDuration(remaining)}` : formatDuration(durationMs)}</span>
-    <span class="meta mode" title="Modalità di riproduzione">{sound.mode ? MODE_LABEL[sound.mode] : ''}</span>
+    <span class="meta mode">{sound.mode ? MODE_LABEL[sound.mode] : ''}</span>
   {/if}
 
   {#if hotkey}
-    <kbd class="hk" class:conflict={hotkey.conflict} title={hotkey.conflict ? "Usata da un'altra app: non funziona" : 'Scorciatoia globale'}
+    <kbd class="hk" class:conflict={hotkey.conflict}
       >{formatAccelerator(hotkey.accelerator)}</kbd
     >
   {/if}
 
   {#if playing}
     <div class="actions">
-      <button type="button" class="act" data-action="stop" title="Ferma" aria-label="Ferma {sound.name}"><Square size={12} fill="currentColor" /></button>
+      <button type="button" class="act" data-action="stop" aria-label="Ferma {sound.name}"><Square size={12} fill="currentColor" /></button>
     </div>
   {/if}
   {#if sound.mode && sound.mode !== defaultMode && view === 'grid'}
     {@const ModeIcon = MODE_ICON[sound.mode]}
-    <span class="mode-dot" title="Modalità: {MODE_LABEL[sound.mode]}"><ModeIcon size={13} /></span>
+    <span class="mode-dot"><ModeIcon size={13} /></span>
   {/if}
   {#if playing?.preview}
-    <span class="preview-badge" title="Anteprima: la senti solo tu"><Headphones size={12} /></span>
+    <span class="preview-badge"><Headphones size={12} /></span>
   {/if}
 </div>
 
@@ -333,15 +332,19 @@
   .list {
     display: grid;
     /* Colonne fisse: ogni riga è una griglia a sé, così restano allineate anche senza scorciatoia. */
-    grid-template-columns: 32px minmax(0, 1fr) 56px 84px 124px 28px;
+    grid-template-columns: 26px minmax(0, 1fr) 56px 84px 124px 28px;
     align-items: center;
     gap: 12px;
-    min-height: 44px;
-    padding: 4px 8px 4px 10px;
+    min-height: 38px;
+    padding: 5px 8px 5px 10px;
     border-color: transparent;
-    border-radius: var(--r-lg);
+    border-radius: var(--r-md);
     background: transparent;
     box-shadow: none;
+  }
+  /* Righe alternate, appena percettibili. */
+  .list:nth-child(even) {
+    background: var(--row-alt);
   }
   .list:hover {
     border-color: transparent;
@@ -354,7 +357,8 @@
   }
   .list .emoji {
     position: relative;
-    font-size: 22px;
+    font-size: 18px;
+    line-height: 1;
     text-align: center;
   }
   .list .name {

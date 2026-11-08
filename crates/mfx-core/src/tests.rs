@@ -22,6 +22,10 @@ struct World {
     conflicts: Vec<String>,
     keys: Vec<(u16, bool)>,
     discord: Option<DiscordVoice>,
+    /// Microfoni silenziati dal sistema (ID).
+    muted_mics: Vec<String>,
+    bridge_muted: Vec<bool>,
+    mute_calls: Vec<(String, bool)>,
 }
 
 type Shared = Arc<Mutex<World>>;
@@ -66,6 +70,19 @@ impl Platform for FakePlatform {
     fn discord_reader(&self) -> DiscordReader {
         let w = self.0.clone();
         Arc::new(move || w.lock().unwrap().discord.clone())
+    }
+    fn set_bridge_muted(&mut self, muted: bool) {
+        self.0.lock().unwrap().bridge_muted.push(muted);
+    }
+    fn set_mic_mute(&mut self, id: &str, mute: bool) -> Option<bool> {
+        let mut w = self.0.lock().unwrap();
+        w.mute_calls.push((id.to_string(), mute));
+        let was = w.muted_mics.iter().any(|m| m == id);
+        w.muted_mics.retain(|m| m != id);
+        if mute {
+            w.muted_mics.push(id.to_string());
+        }
+        Some(was)
     }
 }
 
@@ -529,6 +546,48 @@ fn mic_not_routed_status() {
     assert!(core.get_snapshot().unwrap().status.contains(&ErrorCode::MicNotRouted));
     core.shutdown();
     let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn mute_voice_silences_routed_mic_while_cable_plays() {
+    let h = Harness::new();
+    let a = h.import_tone("voce", 0.1);
+    let b = h.import_tone("normale", 0.1);
+    // Senza l'opzione la voce resta.
+    h.core.play_sound(b.clone()).unwrap();
+    assert!(h.world.lock().unwrap().muted_mics.is_empty());
+    h.advance(48_000);
+
+    let s = h.core.update_sound(a.clone(), SoundPatch { mute_voice: Some(true), ..Default::default() }).unwrap();
+    assert!(s.mute_voice);
+    h.core.play_sound(a.clone()).unwrap();
+    assert_eq!(h.world.lock().unwrap().muted_mics, vec!["mic".to_string()]);
+    assert!(h.root.join("roaming").join("muted-mics.json").exists());
+    h.advance(48_000);
+    assert!(h.world.lock().unwrap().muted_mics.is_empty(), "a fine suono la voce torna");
+    assert!(!h.root.join("roaming").join("muted-mics.json").exists());
+    assert_eq!(h.world.lock().unwrap().bridge_muted, vec![true, false]);
+
+    // L'anteprima va solo in cuffia: la voce non si tocca.
+    h.core.preview_sound(a.clone()).unwrap();
+    assert!(h.world.lock().unwrap().muted_mics.is_empty());
+    h.advance(48_000);
+
+    // Un microfono già muto resta muto alla fine.
+    h.world.lock().unwrap().muted_mics.push("mic".into());
+    h.core.play_sound(a.clone()).unwrap();
+    h.advance(48_000);
+    assert_eq!(h.world.lock().unwrap().muted_mics, vec!["mic".to_string()]);
+}
+
+#[test]
+fn muted_mics_restored_after_crash() {
+    let root = std::env::temp_dir().join(format!("mfx-core-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(root.join("roaming")).unwrap();
+    std::fs::write(root.join("roaming").join("muted-mics.json"), br#"["mic"]"#).unwrap();
+    let h = Harness::at(root.clone(), devices(true));
+    assert_eq!(h.world.lock().unwrap().mute_calls, vec![("mic".to_string(), false)]);
+    assert!(!root.join("roaming").join("muted-mics.json").exists());
 }
 
 #[test]

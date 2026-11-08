@@ -19,7 +19,12 @@
   ];
   let dismissed = $state<ErrorCode[]>([]);
 
-  const code = $derived(ORDER.find((c) => app.status.includes(c) && !dismissed.includes(c)));
+  /** Avvisi che si possono nascondere per sempre (non bloccano l'uso: Discord può filtrare apposta). */
+  const HIDEABLE: ErrorCode[] = ['discord_filters_sounds'];
+
+  const code = $derived(
+    ORDER.find((c) => app.status.includes(c) && !dismissed.includes(c) && !app.prefs.hiddenBanners.includes(c)),
+  );
   const text = $derived(code ? STATUS_TEXT[code] : undefined);
 </script>
 
@@ -39,6 +44,9 @@
         <button type="button" class="sm" onclick={() => (app.guideOpen = true)}>Come fare</button>
       {:else if code === 'discord_wrong_input' || code === 'discord_filters_sounds'}
         <button type="button" class="primary sm" onclick={() => api.openLink('discord-app')}>Apri Discord</button>
+        {#if HIDEABLE.includes(code)}
+          <button type="button" class="ghost sm" onclick={() => app.hideBanner(code)}>Non mostrare più</button>
+        {/if}
       {:else if code === 'discord_push_to_talk'}
         <button type="button" class="primary sm" onclick={() => app.openSettings('ptt')}>Apri impostazioni</button>
       {:else if code === 'default_is_cable'}

@@ -24,7 +24,7 @@ Debug della WebView reale: avvia con `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--re
 e collega un client CDP; in sviluppo lo store è su `window.__app`.
 
 Test visivi senza core: `npm run dev:ui` e apri `http://localhost:5173/mock.html` (core simulato in memoria da
-`ui/src/dev-mock.ts`; parametri `?status=cable_missing,mic_not_routed`, `?n=200`, `?view=list`, `?paused`, `?mac`
+`ui/src/dev-mock.ts`; parametri `?status=cable_missing,mic_not_routed`, `?n=200`, `?view=list`, `?paused`, `?update=1.2.0` (nuova versione su GitHub), `?mac`
 per la variante Mac della UI).
 Non tocca l'istanza di MicFX installata.
 

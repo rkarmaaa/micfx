@@ -463,6 +463,15 @@
             </div>
             <div class="row">
               <div class="text">
+                <span class="t">Avvisa quando esce una nuova versione</span>
+                <span class="d">All'apertura della finestra MicFX controlla su GitHub, al massimo ogni 6 ore.</span>
+              </div>
+              <div class="ctl">
+                <Switch checked={app.prefs.updateNotify} label="Avvisa quando esce una nuova versione" onchange={(v) => app.setPrefs({ updateNotify: v })} />
+              </div>
+            </div>
+            <div class="row">
+              <div class="text">
                 <span class="t">Finestra pronta dopo la chiusura</span>
                 <span class="d">Per quanto la finestra resta in memoria per riaprirsi all'istante. 0 = libera subito la memoria.</span>
               </div>

@@ -16,7 +16,7 @@ const WINDOWS_STATUS: Partial<Record<ErrorCode, { title: string; body: string }>
     body: 'Così non senti più l\'audio del PC. Imposta le cuffie come dispositivo di riproduzione predefinito.',
   },
   discord_filters_sounds: {
-    title: 'Discord sta togliendo i suoni',
+    title: 'La riduzione del rumore è attiva su Discord',
     body: 'La soppressione del rumore (Krisp) li tratta come rumore. In Discord → Voce e video → Soppressione del rumore: Nessuna.',
   },
   discord_wrong_input: {

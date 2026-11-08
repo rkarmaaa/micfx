@@ -18,6 +18,15 @@ const NAMES: [string, string][] = [
 ];
 const N = Number(q.get('n') ?? NAMES.length);
 
+// Ultima release su GitHub: `?update=1.2.0` simula una nuova versione, altrimenti nessuna.
+const realFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  if (String(input).startsWith('https://api.github.com/')) {
+    return Promise.resolve(new Response(JSON.stringify({ tag_name: `v${q.get('update') ?? '1.0.0'}`, draft: false, prerelease: false })));
+  }
+  return realFetch(input, init);
+};
+
 let folders: Folder[] = [
   { id: 'f1', name: 'Meme', order: 0 },
   { id: 'f2', name: 'Reazioni', order: 1 },

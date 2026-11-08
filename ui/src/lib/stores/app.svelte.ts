@@ -25,6 +25,7 @@ import {
 } from '../api';
 import { fallbackEmoji, loadEmoji, preloadEmoji, suggestForName } from '../emoji/emoji';
 import { errorText } from '../util/messages';
+import { CHECK_EVERY_MS, isNewer, latestVersion } from '../util/update';
 import { dbToPercent, percentToDb } from '../util/volume';
 import { toasts } from './toasts.svelte';
 
@@ -41,6 +42,13 @@ export type Prefs = {
   recentEmojis: string[];
   skinTone: number;
   guideDone: boolean;
+  /** Toast quando esce una nuova versione. */
+  updateNotify: boolean;
+  /** Ultimo controllo riuscito (ms epoch) e ultima versione già annunciata. */
+  updateCheckedAt: number;
+  updateSeen: string;
+  /** Avvisi nascosti con "Non mostrare più". */
+  hiddenBanners: string[];
 };
 
 const DEFAULT_PREFS: Prefs = {
@@ -51,6 +59,10 @@ const DEFAULT_PREFS: Prefs = {
   recentEmojis: [],
   skinTone: 0,
   guideDone: false,
+  updateNotify: true,
+  updateCheckedAt: 0,
+  updateSeen: '',
+  hiddenBanners: [],
 };
 
 export const SUPPORTED_EXT = ['mp3', 'wav', 'flac', 'ogg', 'oga', 'm4a', 'aac', 'mp4'];
@@ -245,6 +257,31 @@ class AppStore {
     if (this.prefs.folder !== 'all' && !this.folders.some((f) => f.id === this.prefs.folder)) this.prefs.folder = 'all';
     for (const n of s.notices) this.showNotice(n);
     this.tick();
+    void this.checkUpdate();
+  }
+
+  /** Annuncia una nuova versione una volta sola, se l'utente non ha spento l'avviso. */
+  private async checkUpdate() {
+    const current = this.info?.version;
+    if (!current || !this.prefs.updateNotify || Date.now() - this.prefs.updateCheckedAt < CHECK_EVERY_MS) return;
+    const latest = await latestVersion();
+    if (!latest) return;
+    this.setPrefs({ updateCheckedAt: Date.now() });
+    if (!isNewer(latest, current) || latest === this.prefs.updateSeen || !this.prefs.updateNotify) return;
+    this.setPrefs({ updateSeen: latest });
+    toasts.show({
+      key: 'update',
+      kind: 'info',
+      title: `È disponibile MicFX ${latest}`,
+      detail: `Hai la ${current}. Installala sopra quella attuale: suoni e impostazioni restano.`,
+      timeout: 0,
+      actions: [{ label: 'Scarica', run: () => void api.openLink('release').catch((e) => fail(e)) }],
+    });
+  }
+
+  /** "Non mostrare più" su un avviso: resta nascosto anche ai prossimi avvii. */
+  hideBanner(code: string) {
+    if (!this.prefs.hiddenBanners.includes(code)) this.setPrefs({ hiddenBanners: [...this.prefs.hiddenBanners, code] });
   }
 
   private subscribe() {

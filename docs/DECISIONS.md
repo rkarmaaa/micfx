@@ -73,6 +73,13 @@ Scelte prese durante lo sviluppo, rispetto a [SPEC.md](SPEC.md). Le più recenti
   attivi: dopo un crash l'avvio successivo li riattiva. Su Mac il bridge azzera la voce con una rampa di 10 ms.
   L'anteprima (solo cuffia) non tocca la voce.
 
+## Avviso di nuove versioni
+
+- La UI (non il core) chiede a `api.github.com` l'ultima release pubblicata quando la finestra si apre, al massimo
+  ogni 6 ore (`ui/src/lib/util/update.ts`, CSP `connect-src` aperta solo a quell'host). A riposo nessuna rete:
+  la finestra è effimera. Ogni versione si annuncia una volta sola con un toast; si spegne in Impostazioni →
+  Avvio e finestra (`ui.prefs.updateNotify`).
+
 ## Ancora da misurare (Fase 0 / Fase 5)
 
 - Processi `msedgewebview2.exe` dopo la distruzione della finestra, working set a riposo, context switch:

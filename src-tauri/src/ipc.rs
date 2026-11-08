@@ -180,6 +180,7 @@ pub fn open_link(which: String) -> ApiResult<()> {
         // Protocollo registrato dal client: apre Discord (sulle impostazioni voce, se le riconosce).
         "discord-app" => "discord://-/settings/voice",
         "github" => "https://github.com/rkarmaaa/micfx",
+        "release" => "https://github.com/rkarmaaa/micfx/releases/latest",
         _ => return Err(ApiError::new(ErrorCode::InvalidArgument, "Collegamento sconosciuto.")),
     };
     open_with_system(std::ffi::OsStr::new(url))

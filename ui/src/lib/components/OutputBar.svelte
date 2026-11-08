@@ -8,7 +8,7 @@
   import Switch from './Switch.svelte';
 
   const DEFAULTS: Record<BusKind, number> = { monitor: 80, cable: 100 };
-  /** Gli slider si muovono a passi di 5 %; una tacca per passo, più marcate ogni 25 %. */
+  /** Gli slider si muovono a passi di 5 %; una tacca per passo (sopra e sotto), più lunghe ogni 25 %. */
   const STEP = 5;
   const TICKS = Array.from({ length: MAX_PERCENT / STEP + 1 }, (_, i) => i * STEP);
   const snap = (p: number) => Math.round(p / STEP) * STEP;
@@ -103,7 +103,7 @@
             ondblclick={() => app.setVolume(r.bus, DEFAULTS[r.bus])}
           />
           <span class="ticks" aria-hidden="true">
-            {#each TICKS as t (t)}<i class:major={t % 25 === 0} class:unity={t === 100} class:on={t <= p}></i>{/each}
+            {#each TICKS as t (t)}<i class:major={t % 25 === 0}></i>{/each}
           </span>
         </div>
         <output class="value" class:boost={p > 100}>{p}%</output>
@@ -202,7 +202,15 @@
   .off .label {
     opacity: 0.5;
   }
+  /* Misure del cursore dei volumi: pomello a pillola alto e stretto, tacche specchiate. */
   .slider {
+    --thumb-w: 8px;
+    --thumb-h: 20px;
+    --track-h: 4px;
+    /* Distanza delle tacche dalla traccia e loro lunghezza (minori / ogni 25 %). */
+    --tick-gap: 3px;
+    --tick-len: 3px;
+    --tick-len-major: 5px;
     position: relative;
     min-width: 0;
   }
@@ -212,32 +220,42 @@
     z-index: 1;
     display: block;
     width: 100%;
+    height: var(--thumb-h);
   }
-  /* Tacche sotto la traccia, allineate alle posizioni del cursore (metà pomello per lato). */
+  input[type='range']::-webkit-slider-runnable-track {
+    height: var(--track-h);
+  }
+  input[type='range']::-webkit-slider-thumb {
+    width: var(--thumb-w);
+    height: var(--thumb-h);
+    margin-top: calc((var(--track-h) - var(--thumb-h)) / 2);
+    border-radius: 999px;
+  }
+  /* Tacche sopra e sotto la traccia, allineate alle posizioni del cursore (metà pomello per lato). */
   .ticks {
     position: absolute;
-    top: calc(50% + 5px);
-    left: 8px;
-    right: 8px;
+    top: 50%;
+    left: calc(var(--thumb-w) / 2);
+    right: calc(var(--thumb-w) / 2);
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
+    transform: translateY(-50%);
     pointer-events: none;
   }
   .ticks i {
+    --len: var(--tick-len);
     width: 1px;
-    height: 3px;
-    background: var(--tick);
+    height: calc(var(--track-h) + 2 * var(--tick-gap) + 2 * var(--len));
+    background: linear-gradient(
+      to bottom,
+      var(--tick) 0 var(--len),
+      transparent var(--len) calc(100% - var(--len)),
+      var(--tick) calc(100% - var(--len))
+    );
   }
   .ticks i.major {
-    height: 5px;
-    background: var(--tick-major);
-  }
-  .ticks i.unity {
-    height: 6px;
-  }
-  .ticks i.on {
-    background: var(--tick-on);
+    --len: var(--tick-len-major);
   }
   .off .ticks {
     opacity: 0.5;

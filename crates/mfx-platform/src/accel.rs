@@ -93,8 +93,27 @@ impl Accelerator {
             && !m.alt
             && matches!(
                 self.key.name,
-                "A" | "E" | "F" | "O" | "M" | "1" | "2" | "Comma" | "Enter" | "C" | "V" | "X" | "Z" | "Y"
-                    | "Backspace" | "Delete" | "Left" | "Right" | "Up" | "Down" | "Home" | "End"
+                "A" | "E"
+                    | "F"
+                    | "O"
+                    | "M"
+                    | "1"
+                    | "2"
+                    | "Comma"
+                    | "Enter"
+                    | "C"
+                    | "V"
+                    | "X"
+                    | "Z"
+                    | "Y"
+                    | "Backspace"
+                    | "Delete"
+                    | "Left"
+                    | "Right"
+                    | "Up"
+                    | "Down"
+                    | "Home"
+                    | "End"
             )
     }
 }

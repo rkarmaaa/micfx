@@ -1005,7 +1005,8 @@ impl Engine {
         let slot = &self.hotkeys[i];
         let paused_out = self.hotkeys_paused && slot.binding.action != HotkeyAction::PauseHotkeys;
         let (id, accel) = (slot.id, Accelerator::parse(&slot.binding.accelerator));
-        let suspended = self.window_focused && accel.as_ref().is_ok_and(|a| a.used_by_window(cfg!(target_os = "macos")));
+        let suspended =
+            self.window_focused && accel.as_ref().is_ok_and(|a| a.used_by_window(cfg!(target_os = "macos")));
         let (active, conflict) = match accel {
             Err(_) => (false, false),
             Ok(_) if paused_out || suspended => (false, false),

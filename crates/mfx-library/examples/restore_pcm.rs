@@ -7,8 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
-use mfx_library::import::{import_to, ImportOptions};
 use mfx_library::LibraryIndex;
+use mfx_library::import::{ImportOptions, import_to};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

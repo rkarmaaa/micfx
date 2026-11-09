@@ -1,4 +1,4 @@
-//! Icona nella tray (F12): apri, ferma tutto, pausa scorciatoie, esci.
+//! Icona nella tray (F12): apri, ferma tutto, pausa scorciatoie, verifica aggiornamenti, esci.
 
 use mfx_core::CoreHandle;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
@@ -16,8 +16,11 @@ pub fn create(app: &App) -> tauri::Result<()> {
     let stop = MenuItem::with_id(app, "stop_all", "Ferma tutti i suoni", true, None::<&str>)?;
     let pause = CheckMenuItem::with_id(app, "pause", "Pausa scorciatoie", true, false, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
+    // Il controllo lo fa la UI (il core non fa rete): la voce apre la finestra e glielo chiede.
+    let update = MenuItem::with_id(app, "check_update", "Verifica aggiornamenti", true, None::<&str>)?;
+    let sep2 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Esci da MicFX", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &stop, &pause, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &stop, &pause, &sep, &update, &sep2, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("MicFX")
@@ -25,6 +28,7 @@ pub fn create(app: &App) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, ev| match ev.id().as_ref() {
             "open" => window::show(app),
+            "check_update" => window::request(app, "check-update"),
             "stop_all" => {
                 let _ = app.state::<CoreHandle>().stop_all();
             }

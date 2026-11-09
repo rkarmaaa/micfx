@@ -6,6 +6,31 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 
 pub const MAIN: &str = "main";
 
+/// Azioni chieste alla UI da fuori (menu della tray). Restano in coda finché la UI non le ritira con
+/// `take_ui_requests`: così valgono anche se la finestra va creata e la pagina sta ancora caricando.
+#[derive(Default)]
+pub struct UiRequests(std::sync::Mutex<Vec<String>>);
+
+impl UiRequests {
+    pub fn take(&self) -> Vec<String> {
+        std::mem::take(&mut *self.0.lock().unwrap())
+    }
+}
+
+/// Apre la finestra e le chiede `what` (es. "check-update"). La pagina, se è già pronta, riceve
+/// `ui:request` e ritira la coda; altrimenti la ritira lei all'avvio.
+pub fn request(app: &AppHandle, what: &str) {
+    {
+        let state = app.state::<UiRequests>();
+        let mut q = state.0.lock().unwrap();
+        if !q.iter().any(|x| x == what) {
+            q.push(what.to_string());
+        }
+    }
+    show(app);
+    let _ = tauri::Emitter::emit_to(app, MAIN, "ui:request", ());
+}
+
 pub fn show(app: &AppHandle) {
     let core = app.state::<CoreHandle>();
     if let Some(w) = app.get_webview_window(MAIN) {

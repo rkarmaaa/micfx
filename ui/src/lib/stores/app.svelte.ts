@@ -44,9 +44,11 @@ export type Prefs = {
   guideDone: boolean;
   /** Toast quando esce una nuova versione. */
   updateNotify: boolean;
-  /** Ultimo controllo riuscito (ms epoch) e ultima versione già annunciata. */
+  /** Ultimo controllo riuscito (ms epoch), ultima versione trovata su GitHub e versione il cui avviso è
+   *  stato chiuso con la X (fino ad allora il toast ricompare a ogni apertura della finestra). */
   updateCheckedAt: number;
-  updateSeen: string;
+  updateLatest: string;
+  updateDismissed: string;
   /** Avvisi nascosti con "Non mostrare più". */
   hiddenBanners: string[];
 };
@@ -61,7 +63,8 @@ const DEFAULT_PREFS: Prefs = {
   guideDone: false,
   updateNotify: true,
   updateCheckedAt: 0,
-  updateSeen: '',
+  updateLatest: '',
+  updateDismissed: '',
   hiddenBanners: [],
 };
 
@@ -125,6 +128,8 @@ class AppStore {
   editorId = $state<string | null>(null);
   emojiTarget = $state<{ soundId: string; x: number; y: number } | null>(null);
   menu = $state<{ x: number; y: number; ids: string[] } | null>(null);
+  /** Suoni in attesa di conferma per l'eliminazione (più di uno alla volta). */
+  confirmDelete = $state<string[] | null>(null);
   settingsOpen = $state(false);
   /** Sezione da mostrare all'apertura delle impostazioni (es. 'ptt' dall'avviso di Discord). */
   settingsSection = $state<string | null>(null);
@@ -221,6 +226,7 @@ class AppStore {
     }
     this.subscribe();
     this.ready = true;
+    void this.handleUiRequests();
     // Riapertura dopo "chiudi in tray": la WebView era sospesa, si riallinea lo stato.
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') this.resync();
@@ -260,15 +266,28 @@ class AppStore {
     void this.checkUpdate();
   }
 
-  /** Annuncia una nuova versione una volta sola, se l'utente non ha spento l'avviso. */
-  private async checkUpdate() {
+  /** Cerca una nuova versione su GitHub (al massimo ogni CHECK_EVERY_MS, salvo `manual`) e la annuncia.
+   *  L'avviso ricompare a ogni apertura finché l'utente non lo chiude con la X. */
+  async checkUpdate(manual = false): Promise<'newer' | 'current' | 'error' | null> {
     const current = this.info?.version;
-    if (!current || !this.prefs.updateNotify || Date.now() - this.prefs.updateCheckedAt < CHECK_EVERY_MS) return;
+    if (!current) return null;
+    if (!manual) {
+      this.showUpdateToast(false);
+      if (!this.prefs.updateNotify || Date.now() - this.prefs.updateCheckedAt < CHECK_EVERY_MS) return null;
+    }
     const latest = await latestVersion();
-    if (!latest) return;
-    this.setPrefs({ updateCheckedAt: Date.now() });
-    if (!isNewer(latest, current) || latest === this.prefs.updateSeen || !this.prefs.updateNotify) return;
-    this.setPrefs({ updateSeen: latest });
+    if (!latest) return 'error';
+    this.setPrefs({ updateCheckedAt: Date.now(), updateLatest: latest });
+    if (!isNewer(latest, current)) return 'current';
+    this.showUpdateToast(manual);
+    return 'newer';
+  }
+
+  private showUpdateToast(force: boolean) {
+    const current = this.info?.version;
+    const latest = this.prefs.updateLatest;
+    if (!current || !latest || !isNewer(latest, current)) return;
+    if (!force && (!this.prefs.updateNotify || this.prefs.updateDismissed === latest)) return;
     toasts.show({
       key: 'update',
       kind: 'info',
@@ -276,6 +295,7 @@ class AppStore {
       detail: `Hai la ${current}. Installala sopra quella attuale: suoni e impostazioni restano.`,
       timeout: 0,
       actions: [{ label: 'Scarica', run: () => void api.openLink('release').catch((e) => fail(e)) }],
+      onclose: () => this.setPrefs({ updateDismissed: latest }),
     });
   }
 
@@ -284,7 +304,17 @@ class AppStore {
     if (!this.prefs.hiddenBanners.includes(code)) this.setPrefs({ hiddenBanners: [...this.prefs.hiddenBanners, code] });
   }
 
+  /** Richieste dal menu della tray ("Verifica aggiornamenti"). */
+  private async handleUiRequests() {
+    const reqs = (await api.takeUiRequests().catch(() => null)) ?? [];
+    if (!reqs.includes('check-update')) return;
+    const r = await this.checkUpdate(true);
+    if (r === 'current') toasts.show({ key: 'update', kind: 'success', title: 'MicFX è aggiornato', detail: `Hai l'ultima versione, la ${this.info?.version}.` });
+    else if (r === 'error') toasts.show({ key: 'update', kind: 'error', title: 'Controllo non riuscito', detail: 'GitHub non risponde: riprova tra poco.' });
+  }
+
   private subscribe() {
+    on('ui:request', () => void this.handleUiRequests());
     on('playback:started', (p) => {
       this.playing = [...this.playing.filter((x) => x.play_id !== p.play_id), p];
       if (p.sound_id === this.clickPlayed) this.clickStarted = true;
@@ -548,8 +578,13 @@ class AppStore {
   }
 
   /** Elimina subito dalla vista; per 20 s il core tiene i file e "Annulla" li rimette al loro posto. */
-  async deleteSounds(ids: string[]) {
+  /** Elimina (con "Annulla" nel toast). Con più di un suono chiede prima conferma, salvo `confirmed`. */
+  async deleteSounds(ids: string[], confirmed = false) {
     if (!ids.length) return;
+    if (ids.length > 1 && !confirmed) {
+      this.confirmDelete = [...ids];
+      return;
+    }
     const names = ids.map((id) => this.sound(id)?.name).filter(Boolean) as string[];
     const backup = this.sounds;
     this.sounds = this.sounds.filter((s) => !ids.includes(s.id));
@@ -896,6 +931,18 @@ class AppStore {
       for (const s of list.slice(Math.max(0, from), to + 1)) this.selection.add(s.id);
     }
     this.focusId = id;
+  }
+
+  /** Sostituisce la selezione (riquadro di selezione). `focus` diventa il cursore da tastiera. */
+  selectMany(ids: string[], focus: string | null) {
+    this.clickPlayed = null;
+    const next = new Set(ids);
+    for (const id of [...this.selection]) if (!next.has(id)) this.selection.delete(id);
+    for (const id of next) this.selection.add(id);
+    if (focus) {
+      this.anchorId = focus;
+      this.focusId = focus;
+    }
   }
 
   /** Bersaglio delle azioni: la selezione visibile se contiene `id`, altrimenti solo `id`.

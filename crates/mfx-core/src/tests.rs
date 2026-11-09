@@ -528,6 +528,25 @@ fn lost_index_rebuilt_from_pcm_files() {
     assert!(snap.library.sounds[0].name.starts_with("Suono recuperato"));
 }
 
+/// Un indice valido che non conosce dei file audio (un'altra copia di MicFX con un indice diverso sulla
+/// stessa cartella pcm) non deve cancellarli: finiscono in quarantena, recuperabili.
+#[test]
+fn unknown_pcm_files_are_quarantined_not_deleted() {
+    let h = Harness::new();
+    h.import_tone("a", 0.2);
+    let root = h.root.clone();
+    let h = h.restart();
+    let p = Paths::under(&root);
+    let pcm = std::fs::read_dir(p.pcm_dir()).unwrap().flatten().next().unwrap().path();
+    let stranger = p.pcm_dir().join("0123456789abcdef0123456789abcdef.sbpcm");
+    std::fs::copy(&pcm, &stranger).unwrap();
+    let h = h.restart_without_save(&root);
+    assert_eq!(h.core.get_snapshot().unwrap().library.sounds.len(), 1);
+    assert!(!stranger.exists());
+    assert!(p.orphans_dir().join("0123456789abcdef0123456789abcdef.sbpcm").is_file());
+    assert!(pcm.is_file());
+}
+
 impl Harness {
     /// Riavvia senza che lo shutdown riscriva l'indice (per simulare file rovinati a app spenta).
     fn restart_without_save(mut self, root: &std::path::Path) -> Self {

@@ -1787,10 +1787,19 @@ impl Engine {
             return;
         }
         if self.index_trusted && !self.index.sounds.is_empty() {
-            // Indice valido: gli orfani sono eliminazioni non completate.
+            // Indice valido: di solito gli orfani sono eliminazioni non completate, ma non sempre (un
+            // indice diverso che vede la stessa cartella pcm, per esempio da un processo con AppData
+            // virtualizzato, ha svuotato una libreria vera). Si spostano in quarantena, mai cancellati.
+            let quarantine = self.paths.orphans_dir();
+            let _ = std::fs::create_dir_all(&quarantine);
+            let n = orphans.len();
             for p in orphans {
-                let _ = std::fs::remove_file(p);
+                let dst = quarantine.join(p.file_name().unwrap());
+                if std::fs::rename(&p, &dst).is_err() {
+                    tracing::warn!("orfano non spostato in quarantena, lasciato al suo posto: {}", p.display());
+                }
             }
+            tracing::warn!("{n} file audio non presenti nell'indice spostati in {}", quarantine.display());
             return;
         }
         // Indice perso o recuperato da backup: i file audio tornano in libreria invece di sparire.

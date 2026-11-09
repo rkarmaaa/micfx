@@ -81,6 +81,7 @@ fn main() {
             let sink = Arc::new(Sink(app.handle().clone()));
             let core = CoreHandle::start(paths.clone(), sink)?;
             app.manage(core.clone());
+            app.manage(window::UiRequests::default());
             tray::create(app)?;
             if let Ok(s) = core.get_settings() {
                 ipc::sync_autostart(app.handle(), s.startup.autostart);
@@ -112,6 +113,7 @@ fn main() {
             ipc::open_sound_settings,
             ipc::open_data_folder,
             ipc::open_link,
+            ipc::take_ui_requests,
         ])
         .build(tauri::generate_context!())
         .expect("avvio di MicFX fallito");

@@ -17,6 +17,7 @@
     Mic,
     Play,
     Power,
+    RefreshCw,
     Speaker,
     TriangleAlert,
     X,
@@ -32,6 +33,23 @@
 
   const s = $derived(app.settings!);
   const version = $derived(app.info?.version ?? '');
+
+  // Controllo aggiornamenti manuale: discreto, sotto il numero di versione. Se c'è una versione nuova
+  // compare il solito toast con "Scarica".
+  let updateState = $state<'idle' | 'checking' | 'newer' | 'current' | 'error'>('idle');
+  const updateLabel = $derived(
+    {
+      idle: 'Controlla aggiornamenti',
+      checking: 'Controllo…',
+      newer: 'Nuova versione disponibile',
+      current: 'Sei aggiornato',
+      error: 'GitHub non risponde, riprova',
+    }[updateState],
+  );
+  async function checkUpdate() {
+    updateState = 'checking';
+    updateState = (await app.checkUpdate(true)) ?? 'error';
+  }
 
   type Section = { id: string; label: string; icon: Component<{ size?: number }> };
   const SECTIONS: Section[] = [
@@ -555,6 +573,10 @@
             <div class="version">
               <span class="d">Versione</span>
               <span class="num">{version}</span>
+              <button type="button" class="link check-update" disabled={updateState === 'checking'} onclick={checkUpdate}>
+                <RefreshCw size={12} class={updateState === 'checking' ? 'spin' : ''} />
+                {updateLabel}
+              </button>
             </div>
           </div>
           <div class="card links">
@@ -900,6 +922,24 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 2px;
+  }
+  .check-update {
+    gap: 4px;
+    margin-top: 4px;
+    color: var(--fg-muted);
+    font-size: var(--text-xs);
+    font-weight: 500;
+  }
+  .check-update:hover:not(:disabled) {
+    color: var(--fg);
+  }
+  .check-update :global(.spin) {
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
   .num {
     padding: 2px 10px;

@@ -99,6 +99,12 @@ impl Paths {
         self.library_dir().join("pcm")
     }
 
+    /// Quarantena: `.sbpcm` che l'indice non conosce. Non si cancellano mai da soli (vedi
+    /// `recover_orphans`): un indice "sbagliato" ma valido non deve poter svuotare la libreria.
+    pub fn orphans_dir(&self) -> PathBuf {
+        self.library_dir().join("orphans")
+    }
+
     pub fn logs_dir(&self) -> PathBuf {
         self.local.join("logs")
     }

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Griglia o elenco dei suoni. Clic = suona. Ctrl (⌘ su Mac)/Maiusc+clic = seleziona. Trascina = riordina
-  // o sposta in una cartella. Frecce, Invio, F2, Canc come in Esplora risorse.
+  // o sposta in una cartella; trascinando da uno spazio vuoto si seleziona col riquadro (Ctrl per aggiungere).
+  // Frecce, Invio, F2, Canc come in Esplora risorse.
   import { isMac, primaryMod } from '../util/platform';
   import { app, soundEmoji } from '../stores/app.svelte';
   import { isTypingTarget } from '../util/keys';
@@ -22,6 +23,34 @@
   };
   let drag = $state<Drag | null>(null);
   let suppressClick = false;
+
+  // Selezione a rettangolo, come sul desktop di Windows: si trascina partendo da uno spazio vuoto.
+  // Coordinate nel contenuto del contenitore (scroll compreso), così il riquadro segue lo scorrimento.
+  type Lasso = {
+    pointerId: number;
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+    clientX: number;
+    clientY: number;
+    active: boolean;
+    /** Selezione di partenza: con Ctrl (⌘) il riquadro aggiunge, senza la sostituisce. */
+    base: string[];
+    last: string | null;
+  };
+  let lasso = $state<Lasso | null>(null);
+  let scrollRaf = 0;
+  const lassoRect = $derived(
+    lasso?.active
+      ? {
+          left: Math.min(lasso.x0, lasso.x1),
+          top: Math.min(lasso.y0, lasso.y1),
+          width: Math.abs(lasso.x1 - lasso.x0),
+          height: Math.abs(lasso.y1 - lasso.y0),
+        }
+      : null,
+  );
 
   const view = $derived(app.prefs.view);
   const list = $derived(app.visible);
@@ -123,8 +152,11 @@
       app.editorId = id;
     } else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (e.shiftKey) app.preview(id);
-      else app.play(id);
+      // Con più suoni selezionati partono tutti insieme.
+      for (const t of app.targets(id)) {
+        if (e.shiftKey) app.preview(t);
+        else app.play(t);
+      }
     } else if (e.key === 'F2') {
       e.preventDefault();
       app.renamingId = id;
@@ -155,10 +187,65 @@
   // ------------------------------------------------------------ trascinamento (pointer, non HTML5:
   // su Windows il drop dei file di Tauri disattiva il drag & drop HTML5 nella WebView)
 
+  function contentPoint(clientX: number, clientY: number) {
+    const r = container.getBoundingClientRect();
+    return { x: clientX - r.left + container.scrollLeft, y: clientY - r.top + container.scrollTop };
+  }
+
+  function updateLasso() {
+    if (!lasso) return;
+    const p = contentPoint(lasso.clientX, lasso.clientY);
+    lasso.x1 = Math.max(0, Math.min(p.x, container.scrollWidth));
+    lasso.y1 = Math.max(0, Math.min(p.y, container.scrollHeight));
+    const left = Math.min(lasso.x0, lasso.x1), right = Math.max(lasso.x0, lasso.x1);
+    const top = Math.min(lasso.y0, lasso.y1), bottom = Math.max(lasso.y0, lasso.y1);
+    const hit: string[] = [];
+    for (const el of container.querySelectorAll<HTMLElement>('[data-sound-id]')) {
+      const l = el.offsetLeft, t = el.offsetTop;
+      if (l < right && l + el.offsetWidth > left && t < bottom && t + el.offsetHeight > top) hit.push(el.dataset.soundId!);
+    }
+    // Il cursore da tastiera si sposta solo a fine trascinamento: spostandolo ora, scrollIntoView
+    // litigherebbe con lo scorrimento automatico.
+    lasso.last = hit[hit.length - 1] ?? null;
+    app.selectMany([...new Set([...lasso.base, ...hit])], null);
+  }
+
+  // Vicino ai bordi la lista scorre da sola, come in Esplora risorse.
+  function autoScroll() {
+    scrollRaf = 0;
+    if (!lasso?.active) return;
+    const r = container.getBoundingClientRect();
+    const EDGE = 28;
+    const dy = lasso.clientY < r.top + EDGE ? -(r.top + EDGE - lasso.clientY) : lasso.clientY > r.bottom - EDGE ? lasso.clientY - (r.bottom - EDGE) : 0;
+    if (!dy) return;
+    const before = container.scrollTop;
+    container.scrollTop += Math.max(-24, Math.min(24, dy / 2));
+    if (container.scrollTop !== before) updateLasso();
+    scrollRaf = requestAnimationFrame(autoScroll);
+  }
+
   function onpointerdown(e: PointerEvent) {
     if (e.button !== 0 || app.renamingId) return;
     const id = idFrom(e);
-    if (!id || (e.target as HTMLElement).closest('[data-action], input')) return;
+    if (!id) {
+      // Barra di scorrimento: niente riquadro.
+      if (e.target !== container || e.offsetX >= container.clientWidth || e.offsetY >= container.clientHeight) return;
+      const p = contentPoint(e.clientX, e.clientY);
+      lasso = {
+        pointerId: e.pointerId,
+        x0: p.x,
+        y0: p.y,
+        x1: p.x,
+        y1: p.y,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        active: false,
+        base: primaryMod(e) || e.shiftKey ? [...app.selection] : [],
+        last: null,
+      };
+      return;
+    }
+    if ((e.target as HTMLElement).closest('[data-action], input')) return;
     drag = {
       id,
       ids: app.selection.has(id) ? app.targets(id) : [id],
@@ -174,6 +261,20 @@
   }
 
   function onpointermove(e: PointerEvent) {
+    if (lasso && e.pointerId === lasso.pointerId) {
+      lasso.clientX = e.clientX;
+      lasso.clientY = e.clientY;
+      if (!lasso.active) {
+        const p = contentPoint(e.clientX, e.clientY);
+        if (Math.hypot(p.x - lasso.x0, p.y - lasso.y0) < 5) return;
+        lasso.active = true;
+        container.setPointerCapture(e.pointerId);
+        container.focus({ preventScroll: true });
+      }
+      updateLasso();
+      if (!scrollRaf) scrollRaf = requestAnimationFrame(autoScroll);
+      return;
+    }
     if (!drag || e.pointerId !== drag.pointerId) return;
     drag.x = e.clientX;
     drag.y = e.clientY;
@@ -202,7 +303,22 @@
     drag.target = { id: item.dataset.soundId!, side: after ? 'after' : 'before' };
   }
 
+  function endLasso() {
+    if (lasso?.active) {
+      if (lasso.last && app.selection.has(lasso.last)) {
+        app.anchorId = lasso.last;
+        app.focusId = lasso.last;
+      }
+      suppressClick = true;
+      setTimeout(() => (suppressClick = false), 0);
+    }
+    lasso = null;
+    if (scrollRaf) cancelAnimationFrame(scrollRaf);
+    scrollRaf = 0;
+  }
+
   function onpointerup(e: PointerEvent) {
+    if (lasso && e.pointerId === lasso.pointerId) return endLasso();
     if (!drag || e.pointerId !== drag.pointerId) return;
     const d = drag;
     drag = null;
@@ -224,6 +340,12 @@
   }
 
   function cancelDrag(e: KeyboardEvent) {
+    if (lasso?.active && e.key === 'Escape') {
+      e.stopPropagation();
+      app.selectMany(lasso.base, null);
+      endLasso();
+      return;
+    }
     if (drag?.active && e.key === 'Escape') {
       e.stopPropagation();
       drag = null;
@@ -251,7 +373,7 @@
   {onpointerdown}
   {onpointermove}
   {onpointerup}
-  onpointercancel={() => ((drag = null), (app.soundDropFolder = null))}
+  onpointercancel={() => ((drag = null), (app.soundDropFolder = null), endLasso())}
   onfocus={(e) => {
     if (e.target === container && list.length && !app.focusId) app.focusId = list[0].id;
   }}
@@ -281,6 +403,16 @@
       }}
     />
   {/each}
+  {#if lassoRect}
+    <div
+      class="lasso"
+      style:left="{lassoRect.left}px"
+      style:top="{lassoRect.top}px"
+      style:width="{lassoRect.width}px"
+      style:height="{lassoRect.height}px"
+      aria-hidden="true"
+    ></div>
+  {/if}
 </div>
 
 {#if draggedSound && drag}
@@ -295,6 +427,7 @@
 
 <style>
   .collection {
+    position: relative;
     flex: 1;
     overflow: auto;
     padding: 6px 16px 16px;
@@ -311,6 +444,14 @@
     flex-direction: column;
     gap: 0;
     padding-inline: 12px;
+  }
+  .lasso {
+    position: absolute;
+    z-index: 5;
+    border: 1px solid var(--primary);
+    border-radius: var(--r-xs);
+    background: var(--primary-soft);
+    pointer-events: none;
   }
   .ghost {
     position: fixed;

@@ -34,7 +34,11 @@
           >
         {/each}
         {#if t.kind !== 'progress'}
-          <button type="button" class="icon" aria-label="Chiudi notifica" onclick={() => toasts.dismiss(t.id)}><X size={15} /></button>
+          <button type="button" class="icon" aria-label="Chiudi notifica" onclick={() => {
+              toasts.dismiss(t.id);
+              t.onclose?.();
+            }}><X size={15} /></button
+          >
         {/if}
       </div>
       {#if t.lines?.length}
@@ -138,11 +142,11 @@
     border-color: transparent;
     background: var(--primary-soft-2);
   }
+  /* Centrata sulla riga, alta come il pulsante d'azione: X e "Scarica"/"Annulla" restano allineati. */
   .row :global(.icon) {
-    width: 26px;
-    min-width: 26px;
-    height: 26px;
-    align-self: flex-start;
+    width: var(--h-sm);
+    min-width: var(--h-sm);
+    height: var(--h-sm);
     color: var(--fg-faint);
   }
   ul {

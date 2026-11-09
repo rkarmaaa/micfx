@@ -43,6 +43,7 @@ export { default as Plane } from '@lucide/svelte/icons/plane';
 export { default as Play } from '@lucide/svelte/icons/play';
 export { default as Plus } from '@lucide/svelte/icons/plus';
 export { default as Power } from '@lucide/svelte/icons/power';
+export { default as RefreshCw } from '@lucide/svelte/icons/refresh-cw';
 export { default as RotateCcw } from '@lucide/svelte/icons/rotate-ccw';
 export { default as Search } from '@lucide/svelte/icons/search';
 export { default as Settings } from '@lucide/svelte/icons/settings';

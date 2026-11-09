@@ -138,11 +138,17 @@
       ><SlidersHorizontal /><span>Scorciatoia, volume e modalità…</span><kbd>{kb('Ctrl+Invio')}</kbd></button
     >
   {:else}
+    <div class="menu-label">{ids.length} suoni selezionati</div>
     <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => ids.forEach((id) => app.play(id)))}
-      ><Play /><span>Riproduci tutti</span></button
+      ><Play /><span>Riproduci tutti insieme</span><kbd>Invio</kbd></button
+    >
+    <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => ids.forEach((id) => app.preview(id)))}
+      ><Headphones /><span>Ascolta tutti solo tu</span><kbd>{kb('Maiusc+Invio')}</kbd></button
     >
     {#if playing}
-      <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => ids.forEach((id) => app.stop(id)))}><Square /><span>Ferma</span></button>
+      <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => ids.forEach((id) => app.stop(id)))}
+        ><Square /><span>Ferma tutti</span></button
+      >
     {/if}
   {/if}
   <hr class="menu-sep" />

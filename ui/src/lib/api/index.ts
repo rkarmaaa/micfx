@@ -101,6 +101,8 @@ export const api = {
   openSoundSettings: (tab: 0 | 1 | 2 | 3) => call<void>('open_sound_settings', { tab }),
   openDataFolder: () => call<void>('open_data_folder'),
   openLink: (which: 'vb-cable' | 'blackhole' | 'discord-voice' | 'discord-app' | 'github' | 'release') => call<void>('open_link', { which }),
+  /** Azioni chieste dal menu della tray (es. "check-update"), in attesa: la chiamata svuota la coda. */
+  takeUiRequests: () => call<string[]>('take_ui_requests'),
 };
 
 export type EventMap = {
@@ -114,6 +116,8 @@ export type EventMap = {
   'settings:changed': Settings;
   'discord:changed': { discord: DiscordInfo | null };
   notice: Notice;
+  /** Dal guscio (tray): ci sono richieste in coda, da ritirare con `takeUiRequests`. */
+  'ui:request': null;
 };
 
 export function on<K extends keyof EventMap>(name: K, cb: (payload: EventMap[K]) => void): Promise<UnlistenFn> {

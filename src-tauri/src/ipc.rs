@@ -169,6 +169,12 @@ pub fn open_data_folder() -> ApiResult<()> {
         .map_err(|e| ApiError::new(ErrorCode::IoError, e.to_string()))
 }
 
+/// Azioni chieste dalla tray in attesa (vedi `window::request`), svuota la coda.
+#[tauri::command(rename_all = "snake_case")]
+pub fn take_ui_requests(requests: State<'_, crate::window::UiRequests>) -> Vec<String> {
+    requests.take()
+}
+
 /// Solo indirizzi noti: la UI non può aprire URL arbitrari.
 #[tauri::command(rename_all = "snake_case")]
 pub fn open_link(which: String) -> ApiResult<()> {

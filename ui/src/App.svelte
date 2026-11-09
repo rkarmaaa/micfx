@@ -14,6 +14,7 @@
   import SetupGuide from './lib/components/SetupGuide.svelte';
   import ShortcutsHelp from './lib/components/ShortcutsHelp.svelte';
   import SoundCollection from './lib/components/SoundCollection.svelte';
+  import ConfirmDelete from './lib/components/ConfirmDelete.svelte';
   import SoundEditor from './lib/components/SoundEditor.svelte';
   import StatusBanner from './lib/components/StatusBanner.svelte';
   import Toasts from './lib/components/Toasts.svelte';
@@ -28,7 +29,7 @@
   let searchInput = $state<HTMLInputElement>();
   let fileDrag = $state<{ count: number; folder: string | null } | null>(null);
 
-  const overlayOpen = $derived(!!(app.menu || app.emojiTarget || app.editorId || app.guideOpen || app.shortcutsOpen));
+  const overlayOpen = $derived(!!(app.menu || app.emojiTarget || app.editorId || app.confirmDelete || app.guideOpen || app.shortcutsOpen));
   const emojiSound = $derived(app.emojiTarget ? app.sound(app.emojiTarget.soundId) : undefined);
 
   onMount(() => {
@@ -156,6 +157,9 @@
   {/if}
   {#if app.editorId}
     <SoundEditor id={app.editorId} onclose={() => (app.editorId = null)} />
+  {/if}
+  {#if app.confirmDelete}
+    <ConfirmDelete ids={app.confirmDelete ?? []} onclose={() => (app.confirmDelete = null)} />
   {/if}
   {#if app.guideOpen}
     <SetupGuide onclose={() => (app.guideOpen = false)} />

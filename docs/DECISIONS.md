@@ -103,6 +103,31 @@ Scelte prese durante lo sviluppo, rispetto a [SPEC.md](SPEC.md). Le più recenti
   l'"Annulla" dell'eliminazione, che rimette cartella, posizione e suoni come prima.
 - Cambiando cartella la selezione si azzera; le azioni su più suoni valgono solo per quelli visibili.
 
+## Libreria: file audio sconosciuti all'indice (1.1.4)
+
+- All'avvio i `.sbpcm` che un indice valido non conosce vanno in quarantena in `library\orphans\`, **mai
+  cancellati**. Prima si cancellavano come "eliminazioni non completate": una copia di MicFX avviata da un
+  processo con `AppData` virtualizzato (il pacchetto MSIX di un'altra app) leggeva un altro `index.json` ma la
+  stessa cartella `pcm`, e ha svuotato una libreria vera.
+- `cargo run --release -p mfx-library --example restore_pcm -- <index.json> <uscita>` ricrea i `.sbpcm` mancanti
+  dai file originali (`source.path`) con gli stessi nomi: nomi, emoji, cartelle e scorciatoie restano validi.
+
+## Selezione e azioni di gruppo (1.1.4)
+
+- Trascinando da uno spazio vuoto della griglia o della lista compare il riquadro di selezione (Ctrl/⌘ o Maiusc
+  per aggiungere, Esc per annullare, scorrimento automatico ai bordi). Il cursore da tastiera si sposta solo al
+  rilascio, per non litigare con lo scorrimento.
+- Eliminare più di un suono chiede conferma (focus su "Annulla"); resta anche "Annulla" nel toast.
+- Invio e Maiusc+Invio agiscono su tutta la selezione, come "Riproduci tutti insieme" e "Ascolta tutti solo tu".
+
+## Aggiornamenti (1.1.4)
+
+- L'avviso di una nuova versione ricompare a ogni apertura finché non si chiude con la X (`updateDismissed`); "Scarica"
+  non lo spegne. Controllo manuale discreto in Impostazioni → Informazioni e voce "Verifica aggiornamenti" nel menu
+  della tray. Il controllo resta nella UI (il core non fa rete): la tray mette la richiesta in coda
+  (`window::request`), apre la finestra ed emette `ui:request`; la pagina la ritira con `take_ui_requests`, anche se
+  stava ancora caricando.
+
 ## Selettore emoji
 
 - Misurato a freddo (finestra appena creata): ~0,8 s per il test su canvas delle emoji recenti e ~1,5 s per

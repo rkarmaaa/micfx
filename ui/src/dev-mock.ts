@@ -81,7 +81,22 @@ const devices = [
   { id: 'd3', name: 'CABLE Input (VB-Audio Virtual Cable)', is_default: false, is_cable: true, mix_rate: 48000 },
 ];
 
+// Menu della tray: `?tray` simula "Verifica aggiornamenti" all'apertura; in console `__tray()` lo rifà.
+const uiRequests: string[] = q.has('tray') ? ['check-update'] : [];
+(window as unknown as { __tray: () => void }).__tray = () => {
+  uiRequests.push('check-update');
+  void emit('ui:request', null);
+};
+
 let playSeq = 1;
+const active = new Map<number, { sound_id: string; timer: ReturnType<typeof setTimeout> }>();
+function endPlay(play_id: number) {
+  const v = active.get(play_id);
+  if (!v) return;
+  clearTimeout(v.timer);
+  active.delete(play_id);
+  void emit('playback:ended', { play_id, sound_id: v.sound_id });
+}
 const libraryChanged = (added: Sound[] = [], updated: Sound[] = [], removed: string[] = []) =>
   void emit('library:changed', { added, updated, removed, folders: [...folders].sort((a, b) => a.order - b.order) });
 
@@ -119,9 +134,16 @@ mockIPC(
         const s = sounds.find((x) => x.id === a.sound_id)!;
         const p = { play_id: playSeq++, sound_id: s.id, started_at_ms: Date.now(), duration_ms: (s.frames / 48000) * 1000, preview: cmd === 'preview_sound' };
         void emit('playback:started', p);
-        setTimeout(() => void emit('playback:ended', { play_id: p.play_id, sound_id: s.id }), p.duration_ms);
+        active.set(p.play_id, { sound_id: s.id, timer: setTimeout(() => endPlay(p.play_id), p.duration_ms) });
         return p.play_id;
       }
+      // Come il core: Ferma chiude le voci del suono (o tutte) ed emette playback:ended.
+      case 'stop_sound':
+        for (const [id, v] of active) if (v.sound_id === a.sound_id) endPlay(id);
+        return null;
+      case 'stop_all':
+        for (const id of [...active.keys()]) endPlay(id);
+        return null;
       case 'update_sound': {
         const s = sounds.find((x) => x.id === a.sound_id)!;
         const p = a.patch;
@@ -176,6 +198,8 @@ mockIPC(
       case 'update_settings':
         merge(settings as unknown as Record<string, unknown>, JSON.parse(JSON.stringify(a.patch)));
         return JSON.parse(JSON.stringify(settings));
+      case 'take_ui_requests':
+        return uiRequests.splice(0);
       case 'get_diagnostics':
         return {
           version: '1.0.0',

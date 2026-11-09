@@ -13,6 +13,8 @@ export type Toast = {
   /** ms; 0 = finché l'utente non la chiude. */
   timeout: number;
   key?: string;
+  /** Solo per la X: chiusura voluta dall'utente (non per timeout, azioni o finestra chiusa). */
+  onclose?: () => void;
 };
 
 class Toasts {

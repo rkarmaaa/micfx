@@ -2,7 +2,8 @@
 //!
 //! - [`mixer`]: voci, gain, fade, furto di voci, limiter. Nessuna allocazione in `render`.
 //! - [`bus`]: bus d'uscita reale con ciclo di vita Closed → Running → WarmIdle: WASAPI shared/event-driven
-//!   su Windows, AUHAL di CoreAudio su macOS (dove c'è anche [`bridge`], la voce del microfono).
+//!   su Windows, AUHAL di CoreAudio su macOS.
+//! - [`bridge`] e [`voice`]: la voce del microfono dentro il cavo, con la riduzione del rumore facoltativa.
 //! - [`sink`]: trait [`OutputBus`] usato dall'engine, con un bus offline per i test.
 //!
 //! Regole real-time (SPEC §6.5): nel thread audio niente allocazioni, lock, log, I/O o drop che liberano
@@ -10,7 +11,11 @@
 
 pub mod mixer;
 pub mod sink;
+pub mod voice;
 
+#[cfg(windows)]
+#[path = "bridge_win.rs"]
+pub mod bridge;
 #[cfg(windows)]
 #[path = "bus_win.rs"]
 pub mod bus;
@@ -19,6 +24,7 @@ pub mod bus;
 pub mod event;
 
 #[cfg(target_os = "macos")]
+#[path = "bridge_mac.rs"]
 pub mod bridge;
 #[cfg(target_os = "macos")]
 #[path = "bus_mac.rs"]

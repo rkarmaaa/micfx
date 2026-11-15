@@ -1,10 +1,13 @@
 <script lang="ts">
   // Volumi in basso: cuffie (quello che senti tu) e microfono virtuale (quello che sentono gli altri).
+  // Il nome del dispositivo apre l'elenco dei dispositivi; sotto quello del microfono, la riduzione del rumore.
   import { CABLE_NAME } from '../util/platform';
   import type { BusKind } from '../api';
-  import { ChevronDown, Headphones, Mic, MicOff, TriangleAlert } from '../icons';
+  import { Headphones, Mic, MicOff, TriangleAlert } from '../icons';
   import { app } from '../stores/app.svelte';
+  import { cableOptions, monitorOptions } from '../util/devices';
   import { MAX_PERCENT, formatDb, percentToDb } from '../util/volume';
+  import Select from './Select.svelte';
   import Switch from './Switch.svelte';
 
   const DEFAULTS: Record<BusKind, number> = { monitor: 80, cable: 100 };
@@ -13,9 +16,9 @@
   const TICKS = Array.from({ length: MAX_PERCENT / STEP + 1 }, (_, i) => i * STEP);
   const snap = (p: number) => Math.round(p / STEP) * STEP;
 
-  const rows: { bus: BusKind; label: string; hint: string }[] = [
-    { bus: 'monitor', label: 'Il mio volume', hint: 'Quello che senti tu in cuffia' },
-    { bus: 'cable', label: 'Volume microfono', hint: 'Quello che sentono gli altri su Discord' },
+  const rows: { bus: BusKind; label: string; hint: string; device: string }[] = [
+    { bus: 'monitor', label: 'Il mio volume', hint: 'Quello che senti tu in cuffia', device: 'Cuffie' },
+    { bus: 'cable', label: 'Volume microfono', hint: 'Quello che sentono gli altri su Discord', device: 'Microfono virtuale' },
   ];
 
   const cableMissing = $derived(app.status.includes('cable_missing'));
@@ -53,6 +56,26 @@
   }
 </script>
 
+{#snippet noise()}
+  <label class="noise">
+    <input
+      type="checkbox"
+      checked={app.settings?.mic.noise_suppression ?? false}
+      onchange={(e) => app.setNoiseSuppression(e.currentTarget.checked)}
+    />
+    <span class="noise-text">
+      <span class="noise-title">Riduzione del rumore</span>
+      <span class="noise-hint">
+        {#if app.status.includes('mic_listen_on')}
+          <TriangleAlert size={12} /> Spegni "Ascolta questo dispositivo"
+        {:else}
+          Filtra i rumori della tua voce, non i suoni
+        {/if}
+      </span>
+    </span>
+  </label>
+{/snippet}
+
 <section class="dock" aria-label="Volumi" bind:this={dock}>
   {#if app.settings && !app.settings.outputs.cable.enabled && !cableMissing}
     <p class="note" role="status"><MicOff size={13} /> Microfono disattivato: i tuoi amici non sentono i suoni.</p>
@@ -70,16 +93,23 @@
         </span>
         <div class="labels">
           <span class="label">{r.label}</span>
-          <button
-            type="button"
-            class="device"
-            class:warn={unavailable}
-            onclick={() => (unavailable ? (app.guideOpen = true) : app.openSettings('audio'))}
-          >
-            {#if unavailable}<TriangleAlert size={12} />{/if}
-            <span>{unavailable ? `${CABLE_NAME} non trovato · Configura` : deviceName(r.bus)}</span>
-            {#if !unavailable}<ChevronDown size={12} />{/if}
-          </button>
+          {#if unavailable}
+            <button type="button" class="device" onclick={() => (app.guideOpen = true)}>
+              <TriangleAlert size={12} />
+              <span>{CABLE_NAME} non trovato · Configura</span>
+            </button>
+          {:else}
+            <Select
+              variant="link"
+              label={r.device}
+              minWidth={280}
+              value={app.settings?.outputs[r.bus].device_id ?? ''}
+              text={deviceName(r.bus)}
+              options={r.bus === 'monitor' ? monitorOptions(app.devices) : cableOptions(app.devices)}
+              onchange={(v) => app.setOutputDevice(r.bus, v || null)}
+              footer={r.bus === 'cable' ? noise : undefined}
+            />
+          {/if}
         </div>
         <Switch
           checked={on}
@@ -173,6 +203,7 @@
     font-size: var(--text-md);
     font-weight: 600;
   }
+  /* Cavo mancante: al posto della select, un collegamento alla guida. */
   .device {
     justify-content: flex-start;
     gap: 3px;
@@ -182,7 +213,7 @@
     border: none;
     background: none;
     box-shadow: none;
-    color: var(--fg-muted);
+    color: var(--warn);
     font-size: var(--text-sm);
     font-weight: 400;
   }
@@ -194,7 +225,38 @@
     background: none;
     color: var(--fg);
   }
-  .device.warn {
+  /* Riga della riduzione del rumore sotto l'elenco del microfono (lo snippet tiene lo scope anche nel portal). */
+  .noise {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 4px 10px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+  }
+  .noise:hover {
+    background: var(--surface-2);
+  }
+  .noise-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .noise-title {
+    color: var(--fg);
+    font-size: var(--text-md);
+    font-weight: 550;
+  }
+  .noise-hint {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--fg-muted);
+    font-size: var(--text-sm);
+  }
+  .noise-hint :global(.lucide) {
+    flex: none;
     color: var(--warn);
   }
   .off input[type='range'],

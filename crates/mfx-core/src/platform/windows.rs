@@ -1,8 +1,11 @@
-//! Piattaforma Windows: WASAPI, `IMMNotificationClient`, `RegisterHotKey`, `SendInput`.
+//! Piattaforma Windows: WASAPI, `IMMNotificationClient`, `RegisterHotKey`, `SendInput`, bridge del
+//! microfono (solo con la riduzione del rumore).
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossbeam_channel::Sender;
+use mfx_audio::bridge::MicBridge;
 use mfx_audio::bus::{BusTiming, WasapiBus};
 use mfx_audio::event::Event;
 use mfx_audio::{DeviceId, OutputBus, Wake};
@@ -10,7 +13,7 @@ use mfx_platform::Accelerator;
 use mfx_platform::devices::{DeviceEvent, Devices, Watcher};
 use mfx_platform::hotkeys::{HotkeyError, HotkeyService};
 
-use super::{BusParams, DiscordReader, MicEndpoint, Platform, RegisterError};
+use super::{BusParams, DiscordReader, MicEndpoint, MicRoute, Platform, RegisterError};
 use crate::api::{BusKind, Device};
 use crate::engine::Command;
 
@@ -18,6 +21,9 @@ pub struct WindowsPlatform {
     devices: Option<Devices>,
     _watcher: Option<Watcher>,
     hotkeys: Option<HotkeyService>,
+    bridge: Option<(MicRoute, MicBridge)>,
+    /// Condiviso con ogni bridge: un bridge riaperto durante un suono resta muto.
+    voice_muted: Arc<AtomicBool>,
 }
 
 impl WindowsPlatform {
@@ -48,7 +54,7 @@ impl WindowsPlatform {
             .map_err(|e| tracing::error!("thread hotkey non avviato: {e}"))
             .ok()
         };
-        Self { devices, _watcher: watcher, hotkeys }
+        Self { devices, _watcher: watcher, hotkeys, bridge: None, voice_muted: Arc::new(AtomicBool::new(false)) }
     }
 }
 
@@ -131,6 +137,35 @@ impl Platform for WindowsPlatform {
 
     fn discord_reader(&self) -> DiscordReader {
         Arc::new(mfx_platform::discord::read_voice_settings)
+    }
+
+    fn set_mic_bridge(&mut self, route: Option<MicRoute>) {
+        match &self.bridge {
+            Some((r, b)) if Some(r) == route.as_ref() => {
+                if b.is_alive() {
+                    return;
+                }
+                tracing::warn!("bridge microfono interrotto (dispositivo cambiato o scollegato): lo riapro");
+            }
+            _ => {}
+        }
+        // Prima si chiude il vecchio: un solo flusso di voce nel cavo.
+        self.bridge = None;
+        let Some(route) = route else {
+            tracing::info!("bridge microfono spento");
+            return;
+        };
+        match MicBridge::start(route.mic_id.as_deref(), &route.cable_id, route.denoise, self.voice_muted.clone()) {
+            Ok(b) => {
+                tracing::info!("bridge microfono: {:?} → cavo (riduzione del rumore: {})", route.mic_id, route.denoise);
+                self.bridge = Some((route, b));
+            }
+            Err(e) => tracing::warn!("bridge microfono non avviato: {e}"),
+        }
+    }
+
+    fn set_bridge_muted(&mut self, muted: bool) {
+        self.voice_muted.store(muted, Ordering::Relaxed);
     }
 
     fn set_mic_mute(&mut self, id: &str, mute: bool) -> Option<bool> {

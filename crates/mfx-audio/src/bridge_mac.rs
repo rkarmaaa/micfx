@@ -1,42 +1,40 @@
-//! Bridge del microfono (macOS, SPEC §6.6 "Bridge"): la voce va dal microfono al microfono virtuale.
+//! Bridge del microfono su macOS (SPEC §6.6 "Bridge"): la voce va dal microfono al microfono virtuale.
 //!
 //! macOS non ha "Ascolta questo dispositivo": senza bridge Discord, che ascolta il cavo virtuale,
 //! sentirebbe solo i suoni. Due AUHAL indipendenti:
 //!
-//! - cattura sul microfono, alla sua frequenza; la callback converte in stereo 48 kHz (interpolazione
+//! - cattura sul microfono, alla sua frequenza; la callback converte in mono 48 kHz (interpolazione
 //!   lineare, sufficiente per la voce) e scrive in un ring `rtrb`;
-//! - riproduzione sul cavo; la callback legge dal ring. Il HAL somma questa uscita a quella del bus
-//!   dei suoni, che resta indipendente (pausa calda compresa).
+//! - riproduzione sul cavo; la callback legge dal ring ([`VoiceOut`]). Il HAL somma questa uscita a
+//!   quella del bus dei suoni, che resta indipendente (pausa calda compresa).
 //!
-//! I due dispositivi hanno clock diversi: la latenza nel ring si tiene intorno a [`TARGET_FRAMES`]
-//! scartando l'eccesso, e dopo un buco si riparte solo a ring di nuovo pieno quanto basta.
+//! Con la riduzione del rumore la rete neurale gira in un thread suo tra i due ring, non nelle
+//! callback del HAL: un frame costa circa 1 ms e non deve far saltare l'audio del microfono.
 //! Nelle callback: niente allocazioni, lock, log (SPEC §6.5).
 
 use std::ffi::c_void;
 use std::ptr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
 
-use rtrb::{Consumer, Producer, RingBuffer};
+use rtrb::{Consumer, Producer};
 
+use crate::SAMPLE_RATE;
 use crate::coreaudio::sys::*;
 use crate::coreaudio::{self, dispose_unit, float_format, new_hal_unit, set_unit_prop};
-use crate::{CHANNELS, SAMPLE_RATE};
+use crate::event::{Event, Wait};
+use crate::voice::{self, Denoise, VoiceOut};
 
-/// Latenza di lavoro nel ring: 20 ms.
-const TARGET_FRAMES: usize = SAMPLE_RATE as usize / 50;
-/// Oltre 4× la latenza di lavoro si scarta l'eccesso (deriva dei clock, callback in ritardo).
-const MAX_FRAMES: usize = TARGET_FRAMES * 4;
 /// Frame massimi per callback di cattura (buffer preallocato).
 const CAPTURE_MAX_FRAMES: usize = 8192;
-/// Rampa del mute della voce: 10 ms, niente click.
-const MUTE_STEP: f32 = 1.0 / (SAMPLE_RATE as f32 / 100.0);
 
 pub struct MicBridge {
     input: AudioUnit,
     output: AudioUnit,
     capture: *mut CaptureState,
-    play: *mut PlayState,
+    play: *mut VoiceOut,
+    denoise: Option<DenoiseThread>,
     pub mic_name: String,
 }
 
@@ -49,33 +47,32 @@ struct CaptureState {
     channels: u32,
     rs: Resampler,
     tx: Producer<f32>,
+    /// Sveglia il thread della riduzione del rumore, se c'è.
+    wake: Option<Arc<Event>>,
 }
 
-struct PlayState {
-    rx: Consumer<f32>,
-    priming: bool,
-    /// "Disattiva la mia voce": la voce scende a zero mentre suona l'effetto.
-    muted: Arc<AtomicBool>,
-    gain: f32,
+struct DenoiseThread {
+    quit: Arc<AtomicBool>,
+    wake: Arc<Event>,
+    thread: Option<JoinHandle<()>>,
 }
 
 /// Interpolazione lineare a passo fisso: `step` = frequenza d'ingresso / 48000.
 struct Resampler {
     step: f64,
     t: f64,
-    prev: [f32; 2],
+    prev: f32,
 }
 
 impl Resampler {
     fn new(in_rate: f64) -> Self {
-        Self { step: in_rate / SAMPLE_RATE as f64, t: 0.0, prev: [0.0; 2] }
+        Self { step: in_rate / SAMPLE_RATE as f64, t: 0.0, prev: 0.0 }
     }
 
     #[inline]
-    fn feed(&mut self, cur: [f32; 2], out: &mut impl FnMut([f32; 2])) {
+    fn feed(&mut self, cur: f32, out: &mut impl FnMut(f32)) {
         while self.t < 1.0 {
-            let t = self.t as f32;
-            out([self.prev[0] + (cur[0] - self.prev[0]) * t, self.prev[1] + (cur[1] - self.prev[1]) * t]);
+            out(self.prev + (cur - self.prev) * self.t as f32);
             self.t += self.step;
         }
         self.t -= 1.0;
@@ -85,8 +82,13 @@ impl Resampler {
 
 impl MicBridge {
     /// Avvia il bridge. `mic_uid = None` = microfono predefinito di macOS. Con `muted` a `true` la
-    /// voce non passa (rampa di 10 ms).
-    pub fn start(mic_uid: Option<&str>, cable_uid: &str, muted: Arc<AtomicBool>) -> Result<Self, String> {
+    /// voce non passa (rampa di 10 ms); con `denoise` passa dalla riduzione del rumore.
+    pub fn start(
+        mic_uid: Option<&str>,
+        cable_uid: &str,
+        denoise: bool,
+        muted: Arc<AtomicBool>,
+    ) -> Result<Self, String> {
         let cable = coreaudio::device_by_uid(cable_uid).ok_or("cavo virtuale non trovato")?;
         let mic = match mic_uid {
             Some(uid) => coreaudio::device_by_uid(uid),
@@ -98,21 +100,30 @@ impl MicBridge {
         }
         let in_ch = coreaudio::channels(mic, false).clamp(1, 2);
         let in_rate = coreaudio::nominal_rate(mic).filter(|r| *r > 0.0).ok_or("frequenza del microfono sconosciuta")?;
-        let (tx, rx) = RingBuffer::<f32>::new(SAMPLE_RATE as usize * CHANNELS / 2);
+
+        let (voice_tx, voice_rx) = voice::ring();
+        // Con la riduzione del rumore la cattura scrive in un ring intermedio letto dal thread del filtro.
+        let (tx, denoise) = if denoise {
+            let (raw_tx, raw_rx) = voice::ring();
+            (raw_tx, Some(DenoiseThread::spawn(raw_rx, voice_tx)?))
+        } else {
+            (voice_tx, None)
+        };
         let capture = Box::into_raw(Box::new(CaptureState {
             unit: ptr::null_mut(),
             buf: vec![0.0f32; CAPTURE_MAX_FRAMES * in_ch as usize].into_boxed_slice(),
             channels: in_ch,
             rs: Resampler::new(in_rate),
             tx,
+            wake: denoise.as_ref().map(|d| d.wake.clone()),
         }));
-        let gain = if muted.load(Ordering::Relaxed) { 0.0 } else { 1.0 };
-        let play = Box::into_raw(Box::new(PlayState { rx, priming: true, muted, gain }));
+        let play = Box::into_raw(Box::new(VoiceOut::new(voice_rx, muted)));
         let mut b = Self {
             input: ptr::null_mut(),
             output: ptr::null_mut(),
             capture,
             play,
+            denoise,
             mic_name: coreaudio::device_name(mic).unwrap_or_default(),
         };
         b.output = open_output(cable, play).map_err(|e| format!("uscita sul cavo: {e}"))?;
@@ -142,17 +153,64 @@ impl Drop for MicBridge {
             if !self.output.is_null() {
                 dispose_unit(self.output);
             }
+        }
+        // Il filtro si ferma dopo le callback: nessuno lo sveglia più.
+        self.denoise = None;
+        // SAFETY: stati creati con Box::into_raw in start() e non più usati.
+        unsafe {
             drop(Box::from_raw(self.capture));
             drop(Box::from_raw(self.play));
         }
     }
 }
 
-fn open_output(dev: AudioObjectID, play: *mut PlayState) -> Result<AudioUnit, OSStatus> {
+impl DenoiseThread {
+    fn spawn(mut rx: Consumer<f32>, mut tx: Producer<f32>) -> Result<Self, String> {
+        let wake = Arc::new(Event::new().map_err(|e| e.to_string())?);
+        let quit = Arc::new(AtomicBool::new(false));
+        // La rete si costruisce qui (alloca), fuori da ogni thread audio.
+        let mut dn = Denoise::new();
+        let (w, q) = (wake.clone(), quit.clone());
+        let thread = std::thread::Builder::new()
+            .name("mfx-voice-denoise".into())
+            .spawn(move || {
+                // SAFETY: cambia solo la classe QoS del thread corrente.
+                unsafe { pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0) };
+                crate::enable_ftz_daz();
+                let mut emit = |f: &[f32]| voice::push(&mut tx, f);
+                // Sveglia a ogni callback di cattura; il timeout serve solo a non restare appesi.
+                while !q.load(Ordering::Acquire) {
+                    if let Wait::Failed = w.wait(Some(100)) {
+                        break;
+                    }
+                    if let Ok(c) = rx.read_chunk(rx.slots()) {
+                        let (a, b) = c.as_slices();
+                        dn.process(a, &mut emit);
+                        dn.process(b, &mut emit);
+                        c.commit_all();
+                    }
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        Ok(Self { quit, wake, thread: Some(thread) })
+    }
+}
+
+impl Drop for DenoiseThread {
+    fn drop(&mut self) {
+        self.quit.store(true, Ordering::Release);
+        self.wake.set();
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+fn open_output(dev: AudioObjectID, play: *mut VoiceOut) -> Result<AudioUnit, OSStatus> {
     let unit = new_hal_unit()?;
     let setup = || -> Result<(), OSStatus> {
         set_unit_prop(unit, AU_PROP_CURRENT_DEVICE, AU_SCOPE_GLOBAL, 0, &dev)?;
-        let fmt = float_format(SAMPLE_RATE as f64, CHANNELS as u32);
+        let fmt = float_format(SAMPLE_RATE as f64, crate::CHANNELS as u32);
         set_unit_prop(unit, AU_PROP_STREAM_FORMAT, AU_SCOPE_INPUT, 0, &fmt)?;
         let cb = AURenderCallbackStruct { input_proc: play_cb, input_proc_ref_con: play.cast() };
         set_unit_prop(unit, AU_PROP_SET_RENDER_CALLBACK, AU_SCOPE_INPUT, 0, &cb)?;
@@ -225,15 +283,16 @@ unsafe extern "C" fn input_cb(
         return r;
     }
     crate::enable_ftz_daz();
-    let CaptureState { buf, rs, tx, .. } = st;
+    let CaptureState { buf, rs, tx, wake, .. } = st;
     for f in buf[..n * ch].chunks_exact(ch) {
-        let cur = if ch == 1 { [f[0], f[0]] } else { [f[0], f[1]] };
-        rs.feed(cur, &mut |s| {
-            if tx.slots() >= 2 {
-                let _ = tx.push(s[0]);
-                let _ = tx.push(s[1]);
-            }
+        // La voce è mono: i microfoni stereo si sommano a metà.
+        let m = if ch == 1 { f[0] } else { (f[0] + f[1]) * 0.5 };
+        rs.feed(m, &mut |s| {
+            let _ = tx.push(s);
         });
+    }
+    if let Some(w) = wake {
+        w.set();
     }
     0
 }
@@ -247,62 +306,15 @@ unsafe extern "C" fn play_cb(
     frames: u32,
     data: *mut AudioBufferList,
 ) -> OSStatus {
-    // SAFETY: `ref_con` è il PlayState registrato in open_output.
-    let st = unsafe { &mut *(ref_con as *mut PlayState) };
+    // SAFETY: `ref_con` è il VoiceOut registrato in open_output.
+    let st = unsafe { &mut *(ref_con as *mut VoiceOut) };
     // SAFETY: AudioBufferList valido, un buffer interleaved (formato impostato).
     let buf = unsafe { &mut (*data).buffers[0] };
-    let want = (frames as usize * CHANNELS).min(buf.data_size as usize / 4);
+    let want = (frames as usize * crate::CHANNELS).min(buf.data_size as usize / 4);
     // SAFETY: buffer di CoreAudio scrivibile per `data_size` byte.
     let out = unsafe { std::slice::from_raw_parts_mut(buf.data as *mut f32, want) };
-
-    let mut avail = st.rx.slots();
-    if st.priming {
-        if avail < TARGET_FRAMES * CHANNELS {
-            out.fill(0.0);
-            return 0;
-        }
-        st.priming = false;
-    }
-    if avail > MAX_FRAMES * CHANNELS {
-        // Troppa latenza accumulata: si torna a quella di lavoro (a coppie, per non scambiare i canali).
-        let drop_n = (avail - TARGET_FRAMES * CHANNELS) & !1;
-        if let Ok(c) = st.rx.read_chunk(drop_n) {
-            c.commit_all();
-        }
-        avail -= drop_n;
-    }
-    let take = want.min(avail) & !1;
-    if let Ok(c) = st.rx.read_chunk(take) {
-        let (a, b) = c.as_slices();
-        out[..a.len()].copy_from_slice(a);
-        out[a.len()..a.len() + b.len()].copy_from_slice(b);
-        c.commit_all();
-    }
-    if take < want {
-        // Buco: silenzio e si riparte con il ring di nuovo pieno quanto basta.
-        out[take..].fill(0.0);
-        st.priming = true;
-    }
-    apply_mute(&mut out[..take], &mut st.gain, st.muted.load(Ordering::Relaxed));
+    st.render(out);
     0
-}
-
-/// Porta la voce verso 0 (muto) o 1 con una rampa lineare per frame.
-#[inline]
-fn apply_mute(out: &mut [f32], gain: &mut f32, muted: bool) {
-    let target = if muted { 0.0 } else { 1.0 };
-    if *gain == target {
-        if muted {
-            out.fill(0.0);
-        }
-        return;
-    }
-    for f in out.chunks_exact_mut(CHANNELS) {
-        *gain = if muted { (*gain - MUTE_STEP).max(0.0) } else { (*gain + MUTE_STEP).min(1.0) };
-        for s in f {
-            *s *= *gain;
-        }
-    }
 }
 
 #[cfg(test)]
@@ -310,27 +322,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mute_ramp() {
-        let mut g = 1.0;
-        let mut buf = vec![1.0f32; SAMPLE_RATE as usize / 50 * CHANNELS];
-        apply_mute(&mut buf, &mut g, true);
-        assert_eq!(g, 0.0);
-        assert!(buf[0] > 0.9 && *buf.last().unwrap() == 0.0);
-        let mut buf = vec![1.0f32; 64];
-        apply_mute(&mut buf, &mut g, true);
-        assert!(buf.iter().all(|s| *s == 0.0));
-        apply_mute(&mut buf, &mut g, false);
-        assert!(g > 0.0);
-    }
-
-    #[test]
     fn resampler_counts() {
         for (rate, expect) in [(48_000.0, 48_000usize), (44_100.0, 48_000), (96_000.0, 48_000), (16_000.0, 48_000)] {
             let mut rs = Resampler::new(rate);
             let mut n = 0usize;
             for _ in 0..rate as usize {
-                rs.feed([0.5, -0.5], &mut |s| {
-                    assert!((s[0] - 0.5).abs() < 1e-6 || n < 4);
+                rs.feed(0.5, &mut |s| {
+                    assert!((s - 0.5).abs() < 1e-6 || n < 4);
                     n += 1;
                 });
             }

@@ -106,7 +106,8 @@ impl OutputSettings {
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum MicMode {
-    /// Windows: la voce arriva al cavo con "Ascolta questo dispositivo", l'app non la tocca.
+    /// Windows: la voce arriva al cavo con "Ascolta questo dispositivo", l'app non la tocca
+    /// (a meno che non sia accesa la riduzione del rumore, che passa dal bridge).
     #[cfg_attr(not(target_os = "macos"), default)]
     System,
     /// MicFX cattura il microfono e lo manda nel cavo. L'unico modo su macOS.
@@ -121,6 +122,16 @@ pub struct MicSettings {
     pub mode: MicMode,
     /// Microfono da mandare nel cavo in modo Bridge. `None` = microfono predefinito del sistema.
     pub device_id: Option<String>,
+    /// Riduzione del rumore sulla voce (non sui suoni). Su Windows accende il bridge: la voce la manda
+    /// MicFX e "Ascolta questo dispositivo" va spento.
+    pub noise_suppression: bool,
+}
+
+impl MicSettings {
+    /// La voce passa da MicFX: sempre su macOS, su Windows in modo Bridge o con la riduzione del rumore.
+    pub fn bridged(&self) -> bool {
+        self.mode == MicMode::Bridge || self.noise_suppression
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

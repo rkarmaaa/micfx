@@ -933,6 +933,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dfn3_rs"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ccc5b8ba365194ed3cc4d74bc13946fb964f930808fccd692df99e48c4b1172"
+dependencies = [
+ "realfft",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2291,10 +2300,11 @@ dependencies = [
 
 [[package]]
 name = "mfx-audio"
-version = "1.1.4"
+version = "1.2.0"
 dependencies = [
  "assert_no_alloc",
  "criterion",
+ "dfn3_rs",
  "rtrb",
  "thiserror 2.0.21",
  "tracing",
@@ -2304,7 +2314,7 @@ dependencies = [
 
 [[package]]
 name = "mfx-core"
-version = "1.1.4"
+version = "1.2.0"
 dependencies = [
  "crossbeam-channel",
  "memmap2",
@@ -2321,7 +2331,7 @@ dependencies = [
 
 [[package]]
 name = "mfx-library"
-version = "1.1.4"
+version = "1.2.0"
 dependencies = [
  "ebur128",
  "memmap2",
@@ -2340,7 +2350,7 @@ dependencies = [
 
 [[package]]
 name = "mfx-platform"
-version = "1.1.4"
+version = "1.2.0"
 dependencies = [
  "crossbeam-channel",
  "mfx-audio",
@@ -2354,7 +2364,7 @@ dependencies = [
 
 [[package]]
 name = "micfx"
-version = "1.1.4"
+version = "1.2.0"
 dependencies = [
  "mfx-core",
  "serde",

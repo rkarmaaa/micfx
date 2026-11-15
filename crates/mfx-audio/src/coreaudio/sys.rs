@@ -196,3 +196,12 @@ unsafe extern "C" {
     pub fn CFStringGetMaximumSizeForEncoding(length: CFIndex, encoding: u32) -> CFIndex;
     pub fn CFStringGetCString(s: CFStringRef, buffer: *mut c_char, size: CFIndex, encoding: u32) -> u8;
 }
+
+// ------------------------------------------------------------------ pthread (libSystem)
+
+/// `QOS_CLASS_USER_INTERACTIVE`: la classe dei thread che non devono restare indietro rispetto all'audio.
+pub const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
+
+unsafe extern "C" {
+    pub fn pthread_set_qos_class_self_np(qos_class: u32, relative_priority: i32) -> i32;
+}

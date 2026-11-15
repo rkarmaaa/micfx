@@ -20,6 +20,9 @@ pub enum ErrorCode {
     CableBusy,
     DeviceLost,
     MicNotRouted,
+    /// La voce passa dal bridge (riduzione del rumore) ma "Ascolta questo dispositivo" è ancora acceso
+    /// verso il cavo: su Discord arriva doppia, una volta senza filtro.
+    MicListenOn,
     HotkeyConflict,
     HotkeyInvalid,
     ImportUnsupported,

@@ -11,13 +11,17 @@ const WINDOWS_STATUS: Partial<Record<ErrorCode, { title: string; body: string }>
     title: 'La tua voce non arriva a Discord',
     body: 'Attiva "Ascolta questo dispositivo" sul tuo microfono verso CABLE Input, così su Discord arrivano voce e suoni insieme.',
   },
+  mic_listen_on: {
+    title: 'La tua voce arriva due volte',
+    body: 'Con la riduzione del rumore la voce la manda MicFX: spegni "Ascolta questo dispositivo" sul microfono, altrimenti arriva anche senza filtro.',
+  },
   default_is_cable: {
     title: 'CABLE Input è il dispositivo predefinito',
     body: 'Così non senti più l\'audio del PC. Imposta le cuffie come dispositivo di riproduzione predefinito.',
   },
   discord_filters_sounds: {
     title: 'La riduzione del rumore è attiva su Discord',
-    body: 'La soppressione del rumore (Krisp) li tratta come rumore. In Discord → Voce e video → Soppressione del rumore: Nessuna.',
+    body: 'Krisp tratta i suoni come rumore. In Discord → Voce e video → Soppressione del rumore: Nessuna, e accendi la riduzione del rumore di MicFX, che filtra solo la voce.',
   },
   discord_wrong_input: {
     title: 'Discord non ascolta il microfono virtuale',

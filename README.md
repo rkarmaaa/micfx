@@ -9,13 +9,16 @@ scorciatoie.
 | Sistema | Windows 10 o 11 (x64) | macOS 12 o successivo, chip Apple (M1 e successivi) |
 | Microfono virtuale | [VB-Cable](https://vb-audio.com/Cable/) | [BlackHole 2ch](https://existential.audio/blackhole/) |
 | File da scaricare | `MicFX_x.y.z_x64-setup.exe` | `MicFX_x.y.z_aarch64.dmg` |
-| La tua voce su Discord | "Ascolta questo dispositivo" di Windows | la manda MicFX insieme ai suoni |
+| La tua voce su Discord | "Ascolta questo dispositivo" di Windows, o MicFX con la riduzione del rumore | la manda MicFX insieme ai suoni |
 | Scorciatoie della finestra | `Ctrl` | `⌘` |
 
 ## Cosa fa
 
 - **Griglia o elenco**: clic per suonare, `Maiusc+Invio` (`⇧↩` su Mac) o 🎧 per ascoltarlo solo tu.
-- **Il mio volume** (cuffie) e **Volume microfono** (quello che sentono gli altri), ognuno con il suo interruttore.
+- **Il mio volume** (cuffie) e **Volume microfono** (quello che sentono gli altri), ognuno con il suo interruttore;
+  il nome del dispositivo apre l'elenco per cambiarlo al volo.
+- **Riduzione del rumore** della tua voce (DeepFilterNet3, una rete neurale come Krisp): toglie tastiera, ventole
+  e rumori di fondo ma non i suoni, che Krisp su Discord taglierebbe.
 - **Emoji** per ogni suono: tutte, ricercabili in italiano e inglese, con tono della pelle. Al primo import
   MicFX ne suggerisce una dal nome del file.
 - **Rinomina** (F2), **scorciatoie globali facoltative** per ogni suono (funzionano anche nei giochi), cartelle,

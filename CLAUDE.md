@@ -32,7 +32,8 @@ Non tocca l'istanza di MicFX installata.
 
 - `crates/mfx-library`: import (symphonia → rubato → trim → EBU R128 → i16 TPDF), formato `.sbpcm`, `index.json`, scrittura atomica.
 - `crates/mfx-audio`: mixer (voci, fade, furto, limiter), bus WASAPI event-driven (`bus_win.rs`) o AUHAL CoreAudio
-  (`bus_mac.rs`, più `bridge.rs` per la voce), `OfflineBus` per i test.
+  (`bus_mac.rs`), bridge della voce (`bridge_win.rs` / `bridge_mac.rs` sopra `voice.rs`, con la riduzione del
+  rumore DeepFilterNet3), `OfflineBus` per i test.
 - `crates/mfx-platform`: hotkey (`RegisterHotKey` / Carbon), parser accelerator, `SendInput` / `CGEventPost` (PTT),
   dispositivi e notifiche. Codice di sistema in file `*_win.rs` / `*_mac.rs` con la stessa API.
 - `crates/mfx-core`: thread engine, config, contratto IPC (`api.rs`, esportato con ts-rs), test end-to-end su piattaforma finta.

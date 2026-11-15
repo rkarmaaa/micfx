@@ -12,11 +12,13 @@ use rtrb::{Consumer, Producer, PushError, RingBuffer};
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Media::Audio::{
     AUDCLNT_E_DEVICE_IN_USE, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
-    AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, IAudioClient, IAudioRenderClient,
-    IMMDeviceEnumerator, MMDeviceEnumerator, WAVEFORMATEX, WAVEFORMATEXTENSIBLE, WAVEFORMATEXTENSIBLE_0, eConsole,
-    eRender,
+    AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, EDataFlow, IAudioClient,
+    IAudioRenderClient, IMMDeviceEnumerator, MMDeviceEnumerator, WAVEFORMATEX, WAVEFORMATEXTENSIBLE,
+    WAVEFORMATEXTENSIBLE_0, eConsole, eRender,
 };
-use windows::Win32::Media::KernelStreaming::{SPEAKER_FRONT_LEFT, SPEAKER_FRONT_RIGHT, WAVE_FORMAT_EXTENSIBLE};
+use windows::Win32::Media::KernelStreaming::{
+    SPEAKER_FRONT_CENTER, SPEAKER_FRONT_LEFT, SPEAKER_FRONT_RIGHT, WAVE_FORMAT_EXTENSIBLE,
+};
 use windows::Win32::Media::Multimedia::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
 use windows::Win32::System::Com::{
     CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize,
@@ -364,10 +366,30 @@ fn push_ended(tx: &mut Producer<BusEvent>, pushed: &mut bool, play_id: u64, soun
 
 /// Apre l'endpoint in shared mode event-driven con formato fisso float/48 kHz/stereo.
 unsafe fn open_stream(device: &DeviceId, buffer_event: HANDLE) -> windows::core::Result<(Stream, u32)> {
+    // SAFETY: stessi requisiti di open_client.
+    unsafe {
+        let (client, mix_rate) = open_client(device, eRender, CHANNELS as u16, buffer_event)?;
+        let buffer_frames = client.GetBufferSize()?;
+        let render: IAudioRenderClient = client.GetService()?;
+        Ok((Stream { client, render, buffer_frames }, mix_rate))
+    }
+}
+
+/// Client WASAPI shared/event-driven float 32 bit a 48 kHz con `channels` canali (1 o 2) su `device`
+/// (`DEFAULT` = predefinito di quella direzione). Restituisce anche la frequenza del mix format.
+///
+/// # Safety
+/// COM inizializzato sul thread; `buffer_event` valido per tutta la vita del client.
+pub(crate) unsafe fn open_client(
+    device: &DeviceId,
+    flow: EDataFlow,
+    channels: u16,
+    buffer_event: HANDLE,
+) -> windows::core::Result<(IAudioClient, u32)> {
     unsafe {
         let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
         let dev = if device.is_default() {
-            enumerator.GetDefaultAudioEndpoint(eRender, eConsole)?
+            enumerator.GetDefaultAudioEndpoint(flow, eConsole)?
         } else {
             enumerator.GetDevice(PCWSTR(device.as_wide_nul().as_ptr()))?
         };
@@ -376,11 +398,11 @@ unsafe fn open_stream(device: &DeviceId, buffer_event: HANDLE) -> windows::core:
         let mix_rate = (*mix).nSamplesPerSec;
         CoTaskMemFree(Some(mix as *const _));
 
-        let block_align = (CHANNELS * 4) as u16;
+        let block_align = channels * 4;
         let fmt = WAVEFORMATEXTENSIBLE {
             Format: WAVEFORMATEX {
                 wFormatTag: WAVE_FORMAT_EXTENSIBLE as u16,
-                nChannels: CHANNELS as u16,
+                nChannels: channels,
                 nSamplesPerSec: SAMPLE_RATE,
                 nAvgBytesPerSec: SAMPLE_RATE * block_align as u32,
                 nBlockAlign: block_align,
@@ -388,11 +410,11 @@ unsafe fn open_stream(device: &DeviceId, buffer_event: HANDLE) -> windows::core:
                 cbSize: (size_of::<WAVEFORMATEXTENSIBLE>() - size_of::<WAVEFORMATEX>()) as u16,
             },
             Samples: WAVEFORMATEXTENSIBLE_0 { wValidBitsPerSample: 32 },
-            dwChannelMask: SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT,
+            dwChannelMask: if channels == 1 { SPEAKER_FRONT_CENTER } else { SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT },
             SubFormat: KSDATAFORMAT_SUBTYPE_IEEE_FLOAT,
         };
-        // Se il mix format dell'endpoint è diverso, Windows converte (AUTOCONVERTPCM) e la UI
-        // segnala `rate_mismatch`.
+        // Se il mix format dell'endpoint è diverso, Windows converte (AUTOCONVERTPCM: frequenza e
+        // canali, anche in cattura) e la UI segnala `rate_mismatch`.
         let flags = AUDCLNT_STREAMFLAGS_EVENTCALLBACK
             | AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM
             | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY;
@@ -405,8 +427,6 @@ unsafe fn open_stream(device: &DeviceId, buffer_event: HANDLE) -> windows::core:
             None,
         )?;
         client.SetEventHandle(buffer_event)?;
-        let buffer_frames = client.GetBufferSize()?;
-        let render: IAudioRenderClient = client.GetService()?;
-        Ok((Stream { client, render, buffer_frames }, mix_rate))
+        Ok((client, mix_rate))
     }
 }

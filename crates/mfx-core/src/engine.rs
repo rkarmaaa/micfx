@@ -491,20 +491,23 @@ impl Engine {
         self.update_mic_bridge();
     }
 
-    /// Bridge del microfono (modo Bridge): il microfono scelto, se c'è ancora, altrimenti il predefinito,
-    /// mai il cavo. L'ID si risolve qui, così cambiare il predefinito sposta anche il bridge.
+    /// Bridge del microfono (voce che passa da MicFX): il microfono scelto, se c'è ancora, altrimenti
+    /// il predefinito, mai il cavo. L'ID si risolve qui, così cambiare il predefinito sposta anche il bridge.
     fn update_mic_bridge(&mut self) {
-        let route = if self.settings.mic.mode == config::MicMode::Bridge {
+        let mic = &self.settings.mic;
+        let route = if mic.bridged() {
             let cable = self.effective_cable().map(|c| c.id.clone());
-            let mics = || self.raw_mics.iter().filter(|m| !m.is_cable);
-            let wanted = self.settings.mic.device_id.as_deref();
-            let mic = wanted
-                .and_then(|id| mics().find(|m| m.id == id))
-                .or_else(|| mics().find(|m| m.is_default))
-                .or_else(|| mics().next())
+            let mic_id = mic
+                .device_id
+                .as_deref()
+                .and_then(|id| self.mics.iter().find(|m| m.id == id))
+                .or_else(|| self.mics.iter().find(|m| m.is_default))
+                .or_else(|| self.mics.first())
                 .map(|m| m.id.clone());
-            match (cable, mic) {
-                (Some(cable_id), Some(mic_id)) => Some(MicRoute { mic_id: Some(mic_id), cable_id }),
+            match (cable, mic_id) {
+                (Some(cable_id), Some(mic_id)) => {
+                    Some(MicRoute { mic_id: Some(mic_id), cable_id, denoise: mic.noise_suppression })
+                }
                 _ => None,
             }
         } else {
@@ -534,8 +537,11 @@ impl Engine {
                 if self.cable_busy {
                     s.push(ErrorCode::CableBusy);
                 }
-                if self.settings.mic.mode == config::MicMode::System && !self.mics.iter().any(|m| m.routed_to_cable) {
-                    s.push(ErrorCode::MicNotRouted);
+                let routed = self.mics.iter().any(|m| m.routed_to_cable);
+                match (self.settings.mic.bridged(), routed) {
+                    (false, false) => s.push(ErrorCode::MicNotRouted),
+                    (true, true) => s.push(ErrorCode::MicListenOn),
+                    _ => {}
                 }
                 if let Some(d) = self.discord_view() {
                     if d.input_is_cable == Some(false) {
@@ -903,10 +909,13 @@ impl Engine {
             return;
         }
         self.voice_muted = want;
-        // Modo Bridge (macOS): la voce passa dall'app, basta azzerarla.
+        // Modo Bridge: la voce passa dall'app, basta azzerarla.
         self.platform.set_bridge_muted(want);
         if !want {
             self.unmute_mics();
+            return;
+        }
+        if self.settings.mic.bridged() {
             return;
         }
         // Modo Sistema: Windows manda il microfono nel cavo da sé, quindi si silenzia il microfono.
@@ -1273,6 +1282,11 @@ impl Engine {
             }
         } else {
             next.ptt.scancode = None;
+        }
+        if next.mic.noise_suppression && !self.settings.mic.noise_suppression && next.mic.device_id.is_none() {
+            // Windows: il bridge parte dal microfono che "Ascolta" verso il cavo, cioè la voce che
+            // l'utente aveva già configurato, e lo ricorda. Il predefinito di Windows a volte è il cavo stesso.
+            next.mic.device_id = self.mics.iter().find(|m| m.routed_to_cable).map(|m| m.id.clone());
         }
         if next.outputs.monitor.device_id.is_some()
             && next.outputs.monitor.device_id == self.effective_cable().map(|c| c.id.clone())

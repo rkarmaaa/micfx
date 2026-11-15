@@ -46,12 +46,13 @@ pub struct BusParams {
     pub warm_hold_ms: u32,
 }
 
-/// Bridge del microfono (macOS): quale microfono mandare in quale cavo.
+/// Bridge del microfono: quale microfono mandare in quale cavo, e se filtrarne il rumore.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MicRoute {
     /// `None` = microfono predefinito del sistema.
     pub mic_id: Option<String>,
     pub cable_id: String,
+    pub denoise: bool,
 }
 
 pub trait Platform {

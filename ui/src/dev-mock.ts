@@ -58,7 +58,7 @@ let settings: Settings = {
     cable: { device_id: null, volume_db: 0, enabled: true },
     monitor: { device_id: null, volume_db: -6, enabled: true },
   },
-  mic: { mode: isMac ? 'bridge' : 'system', device_id: null },
+  mic: { mode: isMac ? 'bridge' : 'system', device_id: null, noise_suppression: false },
   playback: { max_voices: 32, default_mode: 'overlap', fade_in_ms: 2, fade_out_ms: 8, idle_stop_ms: 2000, warm_hold_ms: 60000 },
   loudness: { target_lufs: -18, ceiling_dbtp: -1, trim_silence: true },
   library: { max_duration_s: 300 },
@@ -195,9 +195,17 @@ mockIPC(
         void emit('settings:changed', JSON.parse(JSON.stringify(settings)));
         return status;
       }
-      case 'update_settings':
+      case 'update_settings': {
         merge(settings as unknown as Record<string, unknown>, JSON.parse(JSON.stringify(a.patch)));
+        // Su Windows il microfono finto "Ascolta" verso il cavo: col filtro acceso la voce arriverebbe doppia.
+        const listenOn = !isMac && settings.mic.noise_suppression;
+        if (listenOn !== status.includes('mic_listen_on')) {
+          if (listenOn) status.push('mic_listen_on');
+          else status.splice(status.indexOf('mic_listen_on'), 1);
+          void emit('status:changed', { status: [...status] });
+        }
         return JSON.parse(JSON.stringify(settings));
+      }
       case 'take_ui_requests':
         return uiRequests.splice(0);
       case 'get_diagnostics':

@@ -148,9 +148,9 @@ impl Platform for MacPlatform {
             tracing::info!("bridge microfono spento");
             return;
         };
-        match MicBridge::start(route.mic_id.as_deref(), &route.cable_id, self.voice_muted.clone()) {
+        match MicBridge::start(route.mic_id.as_deref(), &route.cable_id, route.denoise, self.voice_muted.clone()) {
             Ok(b) => {
-                tracing::info!("bridge microfono: «{}» → cavo", b.mic_name);
+                tracing::info!("bridge microfono: «{}» → cavo (riduzione del rumore: {})", b.mic_name, route.denoise);
                 self.bridge = Some((route, b));
             }
             Err(e) => tracing::warn!("bridge microfono non avviato: {e}"),

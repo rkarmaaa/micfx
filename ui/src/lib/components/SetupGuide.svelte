@@ -11,7 +11,9 @@
   let { onclose }: { onclose: () => void } = $props();
 
   const cableOk = $derived(!app.status.includes('cable_missing'));
-  const micOk = $derived(cableOk && !app.status.includes('mic_not_routed'));
+  // Con la riduzione del rumore (o su Mac) la voce la manda MicFX: "Ascolta" va spento, non acceso.
+  const bridged = $derived(isMac || !!app.settings?.mic.noise_suppression);
+  const micOk = $derived(cableOk && !app.status.includes('mic_not_routed') && !app.status.includes('mic_listen_on'));
   const defaultOk = $derived(cableOk && !app.status.includes('default_is_cable'));
   const rateOk = $derived(!app.status.includes('rate_mismatch'));
   const routedMic = $derived(app.mics.find((m) => m.routed_to_cable));
@@ -55,8 +57,20 @@
         {#if isMac}
           <p>
             Lo fa MicFX: la voce di {bridgeMic ? `«${bridgeMic.name}»` : 'il tuo microfono'} arriva a {cableName} insieme ai suoni.
-            La prima volta macOS chiede il permesso per il microfono: consenti. Il microfono si cambia in Impostazioni → Uscite.
+            La prima volta macOS chiede il permesso per il microfono: consenti. Il microfono si cambia in Impostazioni → Audio.
           </p>
+        {:else if bridged && micOk}
+          <p>
+            Lo fa MicFX, con la riduzione del rumore: la voce di {bridgeMic ? `«${bridgeMic.name}»` : 'il tuo microfono'} arriva a CABLE
+            Input già filtrata. Il microfono si cambia in Impostazioni → Audio.
+          </p>
+        {:else if bridged}
+          <p>
+            Lo fa MicFX, con la riduzione del rumore. Spegni però l'inoltro di Windows, altrimenti la voce arriva due volte: Pannello audio →
+            scheda <em>Registrazione</em> → doppio clic su {routedMic ? `«${routedMic.name}»` : 'il tuo microfono'} → scheda
+            <em>Ascolta</em> → togli la spunta da <em>Ascolta questo dispositivo</em> → OK.
+          </p>
+          <button type="button" class="primary sm" onclick={() => api.openSoundSettings(1)}>Apri scheda Registrazione</button>
         {:else if micOk}
           <p>Il microfono «{routedMic?.name}» arriva a CABLE Input.</p>
         {:else}
@@ -94,7 +108,7 @@
         <ul>
           <li>Dispositivo di input: <em>{isMac ? 'BlackHole 2ch' : 'CABLE Output (VB-Audio Virtual Cable)'}</em></li>
           <li>
-            Soppressione del rumore: <em>Nessuna</em> (Krisp taglia effetti e musica)
+            Soppressione del rumore: <em>Nessuna</em> (Krisp taglia effetti e musica; usa quella di MicFX)
             {#if app.discord}{@render state(app.discord.krisp || app.discord.noise_suppression, 'ora attiva')}{/if}
           </li>
           <li>

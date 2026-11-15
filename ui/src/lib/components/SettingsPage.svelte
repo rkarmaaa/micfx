@@ -23,6 +23,7 @@
     X,
   } from '../icons';
   import { app } from '../stores/app.svelte';
+  import { cableOptions, micOptions, monitorOptions } from '../util/devices';
   import { formatAccelerator, singleKeyFromEvent } from '../util/keys';
   import { CABLE_NAME, isMac, kb, OS_NAME } from '../util/platform';
   import HotkeyInput from './HotkeyInput.svelte';
@@ -91,8 +92,8 @@
     exclusive: 'Ferma tutti gli altri suoni e parte.',
   };
 
-  const renderDevices = $derived(app.devices.filter((d) => !d.is_cable));
   const cableMissing = $derived(app.status.includes('cable_missing'));
+  const listenOn = $derived(app.status.includes('mic_listen_on'));
 
   let active = $state('audio');
   let scroller: HTMLElement;
@@ -219,10 +220,7 @@
                 class="ctl wide"
                 label="Cuffie"
                 value={s.outputs.monitor.device_id ?? ''}
-                options={[
-                  { value: '', label: `Predefinito di ${OS_NAME}` },
-                  ...renderDevices.map((d) => ({ value: d.id, label: d.name + (d.is_default ? ' (predefinito)' : '') })),
-                ]}
+                options={monitorOptions(app.devices)}
                 onchange={(v) => app.setOutputDevice('monitor', v || null)}
               />
             </div>
@@ -239,7 +237,7 @@
                 class="ctl wide"
                 label="Microfono virtuale"
                 value={s.outputs.cable.device_id ?? ''}
-                options={[{ value: '', label: `Rileva ${CABLE_NAME} automaticamente` }, ...app.devices.map((d) => ({ value: d.id, label: d.name }))]}
+                options={cableOptions(app.devices)}
                 onchange={(v) => app.setOutputDevice('cable', v || null)}
               />
             </div>
@@ -250,20 +248,37 @@
                 <button type="button" class="sm" onclick={() => (app.guideOpen = true)}>Apri la guida</button>
               </div>
             {/if}
-            {#if isMac}
+            <div class="row">
+              <div class="text">
+                <span class="t">Riduzione del rumore</span>
+                <span class="d"
+                  >Toglie dalla tua voce tastiera, ventole e rumori di fondo, come Krisp su Discord, ma non tocca i suoni.{isMac
+                    ? ''
+                    : ' La voce la manda MicFX: "Ascolta questo dispositivo" va spento.'}</span
+                >
+              </div>
+              <div class="ctl">
+                <Switch checked={s.mic.noise_suppression} label="Riduzione del rumore" onchange={(v) => app.setNoiseSuppression(v)} />
+              </div>
+            </div>
+            {#if listenOn}
+              <div class="row callout">
+                <TriangleAlert size={16} />
+                <span class="grow">"Ascolta questo dispositivo" è ancora acceso: su Discord la tua voce arriva due volte, una senza filtro.</span>
+                <button type="button" class="sm" onclick={() => api.openSoundSettings(1)}>Apri scheda Registrazione</button>
+              </div>
+            {/if}
+            {#if isMac || s.mic.noise_suppression}
               <div class="row">
                 <div class="text">
                   <span class="t">La tua voce</span>
-                  <span class="d">Il microfono che MicFX manda dentro BlackHole insieme ai suoni, così su Discord ti sentono.</span>
+                  <span class="d">Il microfono che MicFX manda dentro {CABLE_NAME} insieme ai suoni, così su Discord ti sentono.</span>
                 </div>
                 <Select
                   class="ctl wide"
                   label="La tua voce"
                   value={s.mic.device_id ?? ''}
-                  options={[
-                    { value: '', label: 'Microfono predefinito di macOS' },
-                    ...app.mics.map((m) => ({ value: m.id, label: m.name + (m.is_default ? ' (predefinito)' : '') })),
-                  ]}
+                  options={micOptions(app.mics)}
                   onchange={(v) => app.updateSettings({ mic: { device_id: v || null } })}
                 />
               </div>

@@ -2,6 +2,8 @@
   // Select del design system: sostituisce <select>, il cui menu a tendina lo disegna Windows e non segue il tema.
   // Il focus resta sul pulsante (aria-activedescendant); l'elenco va in fondo a <body>, così né le modali
   // né i contenitori con scorrimento lo tagliano. Stili in global.scss (.select, .listbox, .option).
+  // `variant="link"`: pulsante a testo semplice (la barra dei volumi); `footer`: contenuto sotto le voci.
+  import type { Snippet } from 'svelte';
   import { Check, ChevronDown } from '../icons';
 
   type Option<V> = { value: V; label: string };
@@ -14,6 +16,10 @@
     size = 'md',
     label,
     disabled = false,
+    variant = 'field',
+    text,
+    minWidth = 140,
+    footer,
   }: {
     value: T;
     options: Option<T>[];
@@ -23,11 +29,19 @@
     /** Nome accessibile, se non c'è un'etichetta visibile. */
     label?: string;
     disabled?: boolean;
+    variant?: 'field' | 'link';
+    /** Testo del pulsante, se diverso dall'etichetta della voce scelta. */
+    text?: string;
+    /** Larghezza minima dell'elenco, se il pulsante è più stretto. */
+    minWidth?: number;
+    /** Sotto le voci, fuori dall'elenco: ad esempio una casella di spunta. */
+    footer?: Snippet;
   } = $props();
 
   const uid = `sel-${Math.random().toString(36).slice(2, 9)}`;
   let trigger: HTMLButtonElement;
   let list = $state<HTMLElement>();
+  let pop = $state<HTMLElement>();
   let open = $state(false);
   let active = $state(-1);
   let pos = $state({ left: 0, top: 0, width: 0, up: false });
@@ -42,10 +56,10 @@
 
   function place() {
     const r = trigger.getBoundingClientRect();
-    const h = Math.min(list?.scrollHeight ?? 0, 300) + 10;
+    const h = (pop?.offsetHeight ?? 0) + 10;
     const below = window.innerHeight - r.bottom;
     const up = below < h && r.top > below;
-    const width = Math.max(r.width, 140);
+    const width = Math.max(r.width, minWidth);
     pos = {
       left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
       top: up ? r.top - 4 : r.bottom + 4,
@@ -75,9 +89,9 @@
 
   // Dopo l'apertura: misura l'elenco (per decidere sopra/sotto), porta in vista l'attiva, chiude su clic fuori.
   $effect(() => {
-    if (!open || !list) return;
+    if (!open || !pop) return;
     place();
-    const el = list;
+    const el = pop;
     const away = (e: Event) => {
       const t = e.target as Node;
       if (!el.contains(t) && !trigger.contains(t)) close(false);
@@ -164,7 +178,7 @@
 <button
   bind:this={trigger}
   type="button"
-  class="select {size} {cls}"
+  class="{variant === 'link' ? 'select-link' : `select ${size}`} {cls}"
   class:open
   role="combobox"
   aria-haspopup="listbox"
@@ -176,23 +190,21 @@
   onclick={() => (open ? close() : show())}
   {onkeydown}
 >
-  <span class="select-value">{current?.label ?? ''}</span>
-  <ChevronDown size={size === 'sm' ? 14 : 16} class="select-chevron" />
+  <span class="select-value">{text ?? current?.label ?? ''}</span>
+  <ChevronDown size={variant === 'link' ? 12 : size === 'sm' ? 14 : 16} class="select-chevron" />
 </button>
 
 {#if open}
   <div
     use:portal
-    bind:this={list}
-    id="{uid}-list"
+    bind:this={pop}
     class="popover listbox"
     class:up={pos.up}
-    role="listbox"
-    aria-label={label}
     style:left="{pos.left}px"
     style:top="{pos.top}px"
     style:min-width="{pos.width}px"
   >
+    <div bind:this={list} id="{uid}-list" class="listbox-items" role="listbox" aria-label={label}>
     {#each options as o, i (o.value)}
       <div
         id="{uid}-{i}"
@@ -210,5 +222,10 @@
         {#if o.value === value}<Check size={15} />{/if}
       </div>
     {/each}
+    </div>
+    {#if footer}
+      <!-- mousedown senza focus: il focus resta sul pulsante e i tasti continuano a guidare l'elenco. -->
+      <div class="listbox-foot" role="presentation" onmousedown={(e) => e.preventDefault()}>{@render footer()}</div>
+    {/if}
   </div>
 {/if}

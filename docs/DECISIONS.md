@@ -192,3 +192,38 @@ cambia solo il livello di sistema (`#[cfg(target_os = "macos")]`, file `*_mac.rs
   allega a una release in bozza con gli SHA-256. La CI gira su `windows-latest` e `macos-latest`.
 - Non ancora verificato su un Mac reale: audio, bridge, hotkey e PTT sono coperti solo da compilazione e test
   automatici sul runner macOS.
+
+## Riduzione del rumore della voce (1.2.0)
+
+- Per far passare i suoni bisogna spegnere Krisp su Discord, che li tratta come rumore: la voce allora arriva con
+  tutti i rumori. MicFX filtra **solo la voce**, prima che si sommi ai suoni nel cavo
+  (`settings.mic.noise_suppression`, Impostazioni → Audio e casella sotto l'elenco del microfono nella barra in basso).
+- **Krisp** non è utilizzabile: l'SDK è commerciale, su licenza, non ridistribuibile in un'app gratuita. Scelto
+  **DeepFilterNet3** (rete neurale per la voce a 48 kHz, MIT/Apache, la qualità open più vicina a Krisp) tramite
+  `dfn3_rs`: Rust puro, unica dipendenza `realfft`, nessuna allocazione dopo la costruzione, pesi inclusi
+  (5,3 MB nella sezione `.dfn3` dell'eseguibile, letti solo quando il filtro si accende). Scartati RNNoise
+  (`nnnoiseless`, qualità nettamente inferiore) e `deep_filter`/`deep-filter-rt` (tract: allocazioni, più pesanti).
+- Costo misurato: ~1 % di un core con AVX2 (0,78 % sul PC di sviluppo, bridge vero); percorso scalare ~10 % di un
+  core su x86. Su Apple Silicon `dfn3_rs` non ha kernel NEON: si stima ~5–10 % di un core (non misurato), ~1 ms per
+  frame di 10 ms. Ritardo aggiunto: 30 ms dell'algoritmo + fino a 10 ms di accumulo del frame.
+- **Windows**: con il filtro acceso la voce passa dal bridge (`mfx-audio/src/bridge_win.rs`): un thread MMCSS con
+  cattura WASAPI del microfono in float mono 48 kHz (Windows converte con `AUTOCONVERTPCM`) e uno stream di
+  riproduzione su CABLE Input accanto al bus dei suoni; la rete gira nello stesso thread (~0,1 ms per frame con
+  AVX2). "Ascolta questo dispositivo" va **spento** (scriverlo richiederebbe API non documentate o i permessi di
+  amministratore): finché un microfono "Ascolta" verso il cavo il core segnala `mic_listen_on` (voce doppia) e la
+  guida dice come fare. Senza filtro tutto resta come prima (modo Sistema, costo zero).
+- Il microfono del bridge su Windows: accendendo il filtro senza un microfono scelto, il core ricorda quello che
+  "Ascoltava" verso il cavo (la voce che l'utente aveva configurato), perché il predefinito di Windows a volte è
+  il cavo stesso e perché, spento "Ascolta", non sarebbe più riconoscibile. Si cambia in Impostazioni → Audio.
+- Con il filtro acceso il bridge resta aperto finché c'è un cavo, come su Mac: a riposo la CPU non è zero (Windows
+  mostra MicFX tra le app che usano il microfono). Il bridge acceso solo durante le chiamate (sessioni di cattura
+  su CABLE Output, SPEC §6.6) resta da fare. Un errore del dispositivo chiude il bridge; il prossimo evento dei
+  dispositivi lo riapre (`MicBridge::is_alive`).
+- **macOS**: la rete non gira nelle callback del HAL (un frame scalare può superare qualche ms): la cattura scrive
+  in un ring intermedio e un thread con QoS `USER_INTERACTIVE`, svegliato dalla callback, filtra e scrive nel ring
+  letto dall'uscita. Accendere o spegnere il filtro riapre il bridge.
+- Parte comune in `mfx-audio/src/voice.rs`: voce mono nel ring (prima stereo), latenza di lavoro 20 ms, mute di
+  "Disattiva la mia voce" con rampa di 10 ms. Su Windows "Disattiva la mia voce" col bridge azzera la voce nel
+  bridge invece di silenziare il microfono di sistema.
+- Barra dei volumi: il nome del dispositivo apre lo stesso elenco della select delle impostazioni (`Select` con
+  `variant="link"` e `footer`), non più la pagina Impostazioni.

@@ -499,6 +499,13 @@ class AppStore {
     }
   }
 
+  /** Riduzione del rumore sulla voce: l'interruttore risponde subito, il core conferma. */
+  async setNoiseSuppression(on: boolean) {
+    if (!this.settings) return;
+    this.settings.mic.noise_suppression = on;
+    if (!(await this.updateSettings({ mic: { noise_suppression: on } }))) this.settings.mic.noise_suppression = !on;
+  }
+
   async updateSettings(patch: Parameters<typeof api.updateSettings>[0]) {
     try {
       this.settings = await api.updateSettings(patch);

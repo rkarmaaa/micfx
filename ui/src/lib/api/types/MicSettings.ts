@@ -5,4 +5,9 @@ export type MicSettings = { mode: MicMode,
 /**
  * Microfono da mandare nel cavo in modo Bridge. `None` = microfono predefinito del sistema.
  */
-device_id: string | null, };
+device_id: string | null, 
+/**
+ * Riduzione del rumore sulla voce (non sui suoni). Su Windows accende il bridge: la voce la manda
+ * MicFX e "Ascolta questo dispositivo" va spento.
+ */
+noise_suppression: boolean, };

@@ -11,7 +11,7 @@ use crate::CoreHandle;
 use crate::api::*;
 use crate::config::{HotkeyBinding, Settings};
 use crate::paths::Paths;
-use crate::platform::{BusParams, DiscordReader, MicEndpoint, Platform, RegisterError};
+use crate::platform::{BusParams, DiscordReader, MicEndpoint, MicRoute, Platform, RegisterError};
 
 #[derive(Default)]
 struct World {
@@ -25,6 +25,8 @@ struct World {
     /// Microfoni silenziati dal sistema (ID).
     muted_mics: Vec<String>,
     bridge_muted: Vec<bool>,
+    /// Ultimo bridge chiesto dall'engine.
+    bridge: Option<MicRoute>,
     mute_calls: Vec<(String, bool)>,
 }
 
@@ -70,6 +72,9 @@ impl Platform for FakePlatform {
     fn discord_reader(&self) -> DiscordReader {
         let w = self.0.clone();
         Arc::new(move || w.lock().unwrap().discord.clone())
+    }
+    fn set_mic_bridge(&mut self, route: Option<MicRoute>) {
+        self.0.lock().unwrap().bridge = route;
     }
     fn set_bridge_muted(&mut self, muted: bool) {
         self.0.lock().unwrap().bridge_muted.push(muted);
@@ -598,6 +603,31 @@ fn mic_not_routed_status() {
     assert!(core.get_snapshot().unwrap().status.contains(&ErrorCode::MicNotRouted));
     core.shutdown();
     let _ = std::fs::remove_dir_all(root);
+}
+
+/// La riduzione del rumore fa passare la voce dal bridge, filtrata, dal microfono che "Ascoltava"
+/// verso il cavo; finché "Ascolta" resta acceso la voce arriva doppia e la UI lo dice.
+#[test]
+fn noise_suppression_bridges_the_routed_mic() {
+    let h = Harness::new();
+    let status = || h.core.get_snapshot().unwrap().status;
+    assert!(!status().contains(&ErrorCode::MicListenOn));
+    let s = h.core.update_settings(serde_json::json!({ "mic": { "noise_suppression": true } })).unwrap();
+    assert_eq!(s.mic.device_id.as_deref(), Some("mic"), "il microfono si ricorda");
+    let route = h.world.lock().unwrap().bridge.clone().expect("bridge acceso");
+    assert_eq!(route.mic_id.as_deref(), Some("mic"));
+    assert_eq!(route.cable_id, "{0.0.0.00000000}.{cable}");
+    assert!(route.denoise);
+    let st = status();
+    assert!(st.contains(&ErrorCode::MicListenOn) && !st.contains(&ErrorCode::MicNotRouted), "{st:?}");
+
+    h.core.update_settings(serde_json::json!({ "mic": { "noise_suppression": false } })).unwrap();
+    let route = h.world.lock().unwrap().bridge.clone();
+    #[cfg(not(target_os = "macos"))]
+    assert!(route.is_none(), "su Windows senza filtro la voce torna ad \"Ascolta\"");
+    #[cfg(target_os = "macos")]
+    assert!(route.is_some_and(|r| !r.denoise));
+    assert!(!status().contains(&ErrorCode::MicListenOn));
 }
 
 #[test]

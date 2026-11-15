@@ -13,6 +13,7 @@
     'discord_wrong_input',
     'discord_filters_sounds',
     'mic_not_routed',
+    'mic_listen_on',
     'default_is_cable',
     'discord_push_to_talk',
     'rate_mismatch',
@@ -39,6 +40,8 @@
       {#if code === 'cable_missing'}
         <button type="button" class="primary sm" onclick={() => api.openLink(isMac ? 'blackhole' : 'vb-cable')}>Scarica {CABLE_NAME}</button>
         <button type="button" class="sm" onclick={() => (app.guideOpen = true)}>Guida</button>
+      {:else if code === 'mic_listen_on'}
+        <button type="button" class="primary sm" onclick={() => api.openSoundSettings(1)}>Apri impostazioni microfono</button>
       {:else if code === 'mic_not_routed'}
         <button type="button" class="primary sm" onclick={() => api.openSoundSettings(1)}>Apri impostazioni microfono</button>
         <button type="button" class="sm" onclick={() => (app.guideOpen = true)}>Come fare</button>

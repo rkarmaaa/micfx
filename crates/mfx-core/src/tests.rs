@@ -607,6 +607,8 @@ fn mic_not_routed_status() {
 
 /// La riduzione del rumore fa passare la voce dal bridge, filtrata, dal microfono che "Ascoltava"
 /// verso il cavo; finché "Ascolta" resta acceso la voce arriva doppia e la UI lo dice.
+/// Solo Windows: su macOS "Ascolta questo dispositivo" non esiste e la voce passa sempre dal bridge.
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn noise_suppression_bridges_the_routed_mic() {
     let h = Harness::new();
@@ -622,14 +624,26 @@ fn noise_suppression_bridges_the_routed_mic() {
     assert!(st.contains(&ErrorCode::MicListenOn) && !st.contains(&ErrorCode::MicNotRouted), "{st:?}");
 
     h.core.update_settings(serde_json::json!({ "mic": { "noise_suppression": false } })).unwrap();
-    let route = h.world.lock().unwrap().bridge.clone();
-    #[cfg(not(target_os = "macos"))]
-    assert!(route.is_none(), "su Windows senza filtro la voce torna ad \"Ascolta\"");
-    #[cfg(target_os = "macos")]
-    assert!(route.is_some_and(|r| !r.denoise));
+    assert!(h.world.lock().unwrap().bridge.is_none(), "senza filtro la voce torna ad \"Ascolta\"");
     assert!(!status().contains(&ErrorCode::MicListenOn));
 }
 
+/// Con la voce nel bridge "Disattiva la mia voce" la azzera lì e non tocca i microfoni di sistema.
+#[test]
+fn mute_voice_in_bridge_mutes_only_the_bridge() {
+    let h = Harness::new();
+    h.core.update_settings(serde_json::json!({ "mic": { "noise_suppression": true } })).unwrap();
+    let a = h.import_tone("voce", 0.1);
+    h.core.update_sound(a.clone(), SoundPatch { mute_voice: Some(true), ..Default::default() }).unwrap();
+    h.core.play_sound(a).unwrap();
+    h.advance(48_000);
+    let w = h.world.lock().unwrap();
+    assert_eq!(w.bridge_muted, vec![true, false]);
+    assert!(w.mute_calls.is_empty(), "nessun microfono di sistema toccato");
+}
+
+/// Solo Windows (modo Sistema): su macOS la voce passa sempre dal bridge.
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn mute_voice_silences_routed_mic_while_cable_plays() {
     let h = Harness::new();

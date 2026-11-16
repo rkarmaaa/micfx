@@ -78,6 +78,8 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 export const api = {
   getSnapshot: () => call<Snapshot>('get_snapshot'),
   recheckSetup: () => call<void>('recheck_setup'),
+  /** Prova del microfono: la propria voce in cuffia. Il core la spegne quando la finestra si nasconde. */
+  setMicTest: (on: boolean) => call<void>('set_mic_test', { on }),
   playSound: (sound_id: string) => call<number | null>('play_sound', { sound_id }),
   previewSound: (sound_id: string) => call<number | null>('preview_sound', { sound_id }),
   stopSound: (sound_id: string) => call<void>('stop_sound', { sound_id }),

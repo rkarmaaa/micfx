@@ -1,4 +1,4 @@
-//! Limiter di picco sul bus, senza lookahead (SPEC F09, §6.4).
+//! Limiter di picco sul bus e sulla voce del bridge, senza lookahead (SPEC F09, §6.4).
 //! Attack 1 ms, release 100 ms, ceiling −1 dBFS, più clip di sicurezza.
 
 use crate::SAMPLE_RATE;
@@ -32,6 +32,21 @@ impl Limiter {
             g += (target - g) * coeff;
             frame[0] = (frame[0] * g).clamp(-c, c);
             frame[1] = (frame[1] * g).clamp(-c, c);
+        }
+        self.gain = g;
+    }
+
+    /// Come [`Self::process`], su un buffer mono (la voce del bridge).
+    #[inline]
+    pub fn process_mono(&mut self, buf: &mut [f32]) {
+        let c = self.ceiling;
+        let mut g = self.gain;
+        for s in buf {
+            let peak = s.abs();
+            let target = if peak * g > c { c / peak } else { 1.0 };
+            let coeff = if target < g { self.attack } else { self.release };
+            g += (target - g) * coeff;
+            *s = (*s * g).clamp(-c, c);
         }
         self.gain = g;
     }

@@ -115,7 +115,7 @@ pub enum MicMode {
     Bridge,
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(default)]
 #[ts(export)]
 pub struct MicSettings {
@@ -125,9 +125,24 @@ pub struct MicSettings {
     /// Riduzione del rumore sulla voce (non sui suoni). Su Windows accende il bridge: la voce la manda
     /// MicFX e "Ascolta questo dispositivo" va spento.
     pub noise_suppression: bool,
+    /// Intensità della riduzione del rumore, 0–100: quanto può togliere al massimo (vedi
+    /// [`Self::denoise_limit_db`]). Più bassa = voce più naturale, un po' di ambiente resta.
+    pub noise_strength: u8,
+}
+
+impl Default for MicSettings {
+    fn default() -> Self {
+        Self { mode: MicMode::default(), device_id: None, noise_suppression: false, noise_strength: 50 }
+    }
 }
 
 impl MicSettings {
+    /// Limite di attenuazione di DeepFilterNet per l'intensità scelta: da 6 dB (0, leggerissima) a
+    /// 50 dB (100, toglie tutto quello che può); 50 = 28 dB, naturale.
+    pub fn denoise_limit_db(&self) -> f32 {
+        6.0 + f32::from(self.noise_strength.min(100)) * 0.44
+    }
+
     /// La voce passa da MicFX: sempre su macOS, su Windows in modo Bridge o con la riduzione del rumore.
     pub fn bridged(&self) -> bool {
         self.mode == MicMode::Bridge || self.noise_suppression
@@ -274,6 +289,7 @@ impl Settings {
         }
         l.ceiling_dbtp = l.ceiling_dbtp.clamp(-12.0, 0.0);
         self.library.max_duration_s = self.library.max_duration_s.clamp(5, 3600);
+        self.mic.noise_strength = self.mic.noise_strength.min(100);
         if self.mic.device_id.as_deref().is_some_and(|s| s.trim().is_empty()) {
             self.mic.device_id = None;
         }

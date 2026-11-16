@@ -499,6 +499,20 @@ class AppStore {
     }
   }
 
+  /** Prova del microfono in corso: la propria voce in cuffia. */
+  micTest = $state(false);
+
+  async setMicTest(on: boolean) {
+    if (this.micTest === on) return;
+    this.micTest = on;
+    try {
+      await api.setMicTest(on);
+    } catch (e) {
+      this.micTest = false;
+      fail(e);
+    }
+  }
+
   /** Riduzione del rumore sulla voce: l'interruttore risponde subito, il core conferma. */
   async setNoiseSuppression(on: boolean) {
     if (!this.settings) return;

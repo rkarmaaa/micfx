@@ -2,10 +2,8 @@
 //! del microfono.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossbeam_channel::Sender;
-use mfx_audio::bridge::MicBridge;
 use mfx_audio::bus::{BusTiming, CoreAudioBus};
 use mfx_audio::event::Event;
 use mfx_audio::{DeviceId, OutputBus, Wake};
@@ -13,6 +11,7 @@ use mfx_platform::Accelerator;
 use mfx_platform::devices::{DeviceEvent, Devices, Watcher};
 use mfx_platform::hotkeys::{HotkeyError, HotkeyService};
 
+use super::voices::Voices;
 use super::{BusParams, DiscordReader, MicEndpoint, MicRoute, Platform, RegisterError};
 use crate::api::{BusKind, Device};
 use crate::engine::{Command, Engine};
@@ -21,9 +20,7 @@ pub struct MacPlatform {
     devices: Devices,
     _watcher: Option<Watcher>,
     hotkeys: Option<HotkeyService>,
-    bridge: Option<(MicRoute, MicBridge)>,
-    /// Condiviso con ogni bridge: un bridge riaperto durante un suono resta muto.
-    voice_muted: Arc<AtomicBool>,
+    voices: Voices,
 }
 
 impl MacPlatform {
@@ -55,7 +52,7 @@ impl MacPlatform {
             .map_err(|e| tracing::error!("servizio hotkey non avviato: {e}"))
             .ok()
         };
-        Self { devices, _watcher: watcher, hotkeys, bridge: None, voice_muted: Arc::new(AtomicBool::new(false)) }
+        Self { devices, _watcher: watcher, hotkeys, voices: Voices::new() }
     }
 }
 
@@ -139,25 +136,18 @@ impl Platform for MacPlatform {
     }
 
     fn set_mic_bridge(&mut self, route: Option<MicRoute>) {
-        if self.bridge.as_ref().map(|(r, _)| r) == route.as_ref() {
-            return;
-        }
-        // Prima si chiude il vecchio: un solo flusso di voce nel cavo.
-        self.bridge = None;
-        let Some(route) = route else {
-            tracing::info!("bridge microfono spento");
-            return;
-        };
-        match MicBridge::start(route.mic_id.as_deref(), &route.cable_id, route.denoise, self.voice_muted.clone()) {
-            Ok(b) => {
-                tracing::info!("bridge microfono: «{}» → cavo (riduzione del rumore: {})", b.mic_name, route.denoise);
-                self.bridge = Some((route, b));
-            }
-            Err(e) => tracing::warn!("bridge microfono non avviato: {e}"),
-        }
+        self.voices.set_main(route);
+    }
+
+    fn set_mic_test(&mut self, route: Option<MicRoute>) {
+        self.voices.set_test(route);
     }
 
     fn set_bridge_muted(&mut self, muted: bool) {
-        self.voice_muted.store(muted, Ordering::Relaxed);
+        self.voices.set_muted(muted);
+    }
+
+    fn set_denoise_limit(&mut self, db: f32) {
+        self.voices.set_limit(db);
     }
 }

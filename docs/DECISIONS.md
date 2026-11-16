@@ -227,3 +227,33 @@ cambia solo il livello di sistema (`#[cfg(target_os = "macos")]`, file `*_mac.rs
   bridge invece di silenziare il microfono di sistema.
 - Barra dei volumi: il nome del dispositivo apre lo stesso elenco della select delle impostazioni (`Select` con
   `variant="link"` e `footer`), non più la pagina Impostazioni.
+
+## Livellamento della voce (1.2.1)
+
+- Segnalazione: con la riduzione del rumore la voce arrivava "bassissima, in sottofondo, ovattata". Misure sul PC
+  dell'utente: il microfono (guadagno di Windows già a +18 dB) ha un fondo di −98 dBFS ma il parlato arriva a
+  circa −40 dBFS; nel cavo la voce stava a −46 LUFS contro i −21 dei suoni. Il filtro non c'entra: `dfn3_rs` dà
+  lo stesso risultato dell'inferenza originale (`deep-filter-rt`, tract) e conserva voce e acuti entro 1–3 dB.
+  Prima ci pensava il controllo automatico del guadagno di Discord, che la guida fa spegnere perché abbassa i suoni.
+- Il bridge ora livella la voce (`Agc` in `mfx-audio/src/voice.rs`, dopo il filtro), come un fader e non
+  come un compressore: la prima versione seguiva le sillabe (guadagno che oscillava di ±6 dB, voce "forte",
+  schiacciata e senza corpo). Ora: livello stimato in potenza (come la loudness) sui soli frame di voce, con
+  gate relativo a −20 dB (il residuo tra le parole non conta); primo secondo di voce veloce, poi media di ~2 s;
+  guadagno tra −12 e +30 dB che sale di 6 dB/s e scende di 20 dB/s, fermo nelle pause; obiettivo −23 dBFS,
+  qualche dB sotto i suoni; picchi presi dal limitatore a campione dei bus (`Limiter::process_mono`, −1 dBFS).
+  Sulla registrazione dell'utente: da −45,8 a −24,8 LUFS, guadagno tra +16 e +28 dB, limitatore mai attivo.
+- Vale per tutto il bridge, anche su Mac senza riduzione del rumore (lì gira nella callback di cattura: pochi
+  calcoli, nessuna allocazione).
+- **Intensità** della riduzione del rumore (`mic.noise_strength`, 0–100, default 50): è il limite di
+  attenuazione di DeepFilterNet, da 6 dB a 50 dB (50 = 28 dB). Più bassa = resta un po' di ambiente e la voce
+  suona più naturale. Arriva ai bridge da un `AtomicF32` letto a ogni frame (`set_attenuation_limit_smooth`,
+  100 ms): lo slider agisce dal vivo, senza riaprire i bridge. Uno slider di "rumore minimo" (soglia) non avrebbe
+  senso: DeepFilterNet non è un gate e la sensibilità d'ingresso c'è già in Discord.
+- **Prova del microfono** (come il test di Discord): un secondo bridge, stesso codice e stessa catena, dal
+  microfono alle cuffie (quelle scelte o il predefinito, mai il cavo). Si spegne uscendo dalle impostazioni e
+  quando la finestra si nasconde. I bridge (cavo e prova) li gestisce `mfx-core/src/platform/voices.rs`, uguale
+  su Windows e macOS.
+- **Impostazioni riordinate** per uso: Audio (uscite), Voce (riduzione del rumore, microfono, intensità, prova),
+  Discord (guida e push-to-talk), Scorciatoie, Suoni (riproduzione e import), Generale (avvio, aggiornamenti,
+  finestra), Informazioni (versione, cartella dei dati, diagnostica). Testi accorciati; le righe che dipendono da
+  un interruttore compaiono solo quando serve (intensità, microfono, rilascio del push-to-talk).

@@ -1,6 +1,7 @@
 <script lang="ts">
-  // Impostazioni a pagina intera: sezioni nel menu a sinistra (seguono lo scorrimento), ogni riga
-  // ha titolo e spiegazione a sinistra e il controllo a destra. Esc o la freccia tornano ai suoni.
+  // Impostazioni a pagina intera, in ordine d'uso: dove suonano i suoni, la tua voce, Discord,
+  // scorciatoie, suoni, generale, informazioni. Sezioni nel menu a sinistra (seguono lo scorrimento);
+  // ogni riga ha titolo e spiegazione a sinistra e il controllo a destra. Esc o la freccia tornano ai suoni.
   import { onMount, type Component } from 'svelte';
 
   import { api, type Diagnostics, type HotkeyAction, type PlayMode } from '../api';
@@ -8,24 +9,26 @@
     Activity,
     ArrowLeft,
     BookOpen,
+    Ear,
     ExternalLink,
     FolderOpen,
-    HardDrive,
-    Import,
     Info,
     Keyboard,
+    MessageCircle,
     Mic,
+    MicVocal,
     Play,
-    Power,
     RefreshCw,
+    Settings2,
     Speaker,
+    Square,
     TriangleAlert,
     X,
   } from '../icons';
   import { app } from '../stores/app.svelte';
   import { cableOptions, micOptions, monitorOptions } from '../util/devices';
   import { formatAccelerator, singleKeyFromEvent } from '../util/keys';
-  import { CABLE_NAME, isMac, kb, OS_NAME } from '../util/platform';
+  import { CABLE_NAME, isMac, kb } from '../util/platform';
   import HotkeyInput from './HotkeyInput.svelte';
   import Select from './Select.svelte';
   import Switch from './Switch.svelte';
@@ -34,9 +37,10 @@
 
   const s = $derived(app.settings!);
   const version = $derived(app.info?.version ?? '');
+  const TRAY = isMac ? 'nella barra dei menu' : 'nella tray';
 
-  // Controllo aggiornamenti manuale: discreto, sotto il numero di versione. Se c'è una versione nuova
-  // compare il solito toast con "Scarica".
+  // Controllo aggiornamenti manuale, sotto il numero di versione. Se c'è una versione nuova compare
+  // il solito toast con "Scarica".
   let updateState = $state<'idle' | 'checking' | 'newer' | 'current' | 'error'>('idle');
   const updateLabel = $derived(
     {
@@ -55,20 +59,19 @@
   type Section = { id: string; label: string; icon: Component<{ size?: number }> };
   const SECTIONS: Section[] = [
     { id: 'audio', label: 'Audio', icon: Speaker },
+    { id: 'voice', label: 'Voce', icon: MicVocal },
+    { id: 'discord', label: 'Discord', icon: MessageCircle },
     { id: 'hotkeys', label: 'Scorciatoie', icon: Keyboard },
-    { id: 'playback', label: 'Riproduzione', icon: Play },
-    { id: 'ptt', label: 'Push-to-talk', icon: Mic },
-    { id: 'import', label: 'Importazione', icon: Import },
-    { id: 'startup', label: 'Avvio e finestra', icon: Power },
-    { id: 'data', label: 'Dati e diagnostica', icon: HardDrive },
+    { id: 'sounds', label: 'Suoni', icon: Play },
+    { id: 'general', label: 'Generale', icon: Settings2 },
     { id: 'about', label: 'Informazioni', icon: Info },
   ];
 
   const GLOBAL: { action: HotkeyAction; label: string; help: string }[] = [
-    { action: { type: 'stop_all' }, label: 'Ferma tutti i suoni', help: 'Interrompe subito ogni suono in riproduzione.' },
-    { action: { type: 'mute_cable' }, label: 'Microfono on/off', help: 'Smetti di mandare suoni agli altri, senza chiudere MicFX.' },
+    { action: { type: 'stop_all' }, label: 'Ferma tutti i suoni', help: 'Interrompe subito ogni suono.' },
+    { action: { type: 'mute_cable' }, label: 'Microfono on/off', help: 'Smetti di mandare suoni agli altri.' },
     { action: { type: 'mute_monitor' }, label: 'Cuffie on/off', help: 'Smetti di sentire i suoni in cuffia.' },
-    { action: { type: 'pause_hotkeys' }, label: 'Pausa scorciatoie', help: 'Sospende tutte le scorciatoie globali, utile mentre scrivi.' },
+    { action: { type: 'pause_hotkeys' }, label: 'Pausa scorciatoie', help: 'Sospende tutte le scorciatoie, utile mentre scrivi.' },
     { action: { type: 'open_window' }, label: 'Apri MicFX', help: 'Porta in primo piano questa finestra.' },
   ];
 
@@ -78,6 +81,12 @@
     { value: 'toggle', label: 'Play/Stop' },
     { value: 'exclusive', label: 'Esclusivo' },
   ];
+  const MODE_HELP: Record<PlayMode, string> = {
+    overlap: 'Ogni clic avvia una nuova copia, anche se il suono sta già suonando.',
+    restart: 'Se il suono sta già suonando, riparte da capo.',
+    toggle: 'Il secondo clic ferma il suono.',
+    exclusive: 'Ferma tutti gli altri suoni e parte.',
+  };
   const DURATION_STEPS = [60, 300, 600, 1800, 3600];
   /** Durate proposte; un valore scritto a mano nel config.json resta visibile come voce in più. */
   const DURATIONS = $derived.by(() => {
@@ -85,15 +94,11 @@
     const steps = cur && !DURATION_STEPS.includes(cur) ? [...DURATION_STEPS, cur].sort((x, y) => x - y) : DURATION_STEPS;
     return steps.map((v) => ({ value: v, label: v % 60 ? `${v} secondi` : `${v / 60} ${v === 60 ? 'minuto' : 'minuti'}` }));
   });
-  const MODE_HELP: Record<PlayMode, string> = {
-    overlap: 'Ogni clic avvia una nuova copia, anche se il suono sta già suonando.',
-    restart: 'Se il suono sta già suonando, riparte da capo.',
-    toggle: 'Il secondo clic ferma il suono.',
-    exclusive: 'Ferma tutti gli altri suoni e parte.',
-  };
 
   const cableMissing = $derived(app.status.includes('cable_missing'));
   const listenOn = $derived(app.status.includes('mic_listen_on'));
+  /** La voce passa da MicFX: sempre su Mac, su Windows con la riduzione del rumore. */
+  const bridged = $derived(isMac || s.mic.noise_suppression);
 
   let active = $state('audio');
   let scroller: HTMLElement;
@@ -105,6 +110,16 @@
   let tail = $state<number | null>(null);
   let lufs = $state<number | null>(null);
   let keepalive = $state<number | null>(null);
+  /** L'intensità del filtro invece arriva al core mentre trascini: durante la prova la senti cambiare. */
+  let strength = $state<number | null>(null);
+  const strengthNow = $derived(strength ?? s.mic.noise_strength);
+  const STRENGTH_HELP = $derived(
+    strengthNow < 35
+      ? 'Leggera: voce più naturale, resta un po’ di ambiente.'
+      : strengthNow < 70
+        ? 'Media: toglie i rumori senza cambiare la voce. Consigliata.'
+        : 'Forte: toglie tutto quello che può, la voce può sembrare più asciutta.',
+  );
 
   function fill(v: number, min: number, max: number) {
     return `${((v - min) / (max - min)) * 100}%`;
@@ -135,7 +150,11 @@
       active = current;
     };
     scroller.addEventListener('scroll', onscroll, { passive: true });
-    return () => scroller.removeEventListener('scroll', onscroll);
+    return () => {
+      scroller.removeEventListener('scroll', onscroll);
+      // Uscendo dalle impostazioni la prova del microfono si ferma.
+      void app.setMicTest(false);
+    };
   });
 
   // Nel menu orizzontale (finestre strette) la sezione attiva resta visibile.
@@ -180,6 +199,32 @@
 
 <svelte:window {onkeydown} />
 
+{#snippet range(
+  value: number,
+  min: number,
+  max: number,
+  step: number,
+  label: string,
+  out: string,
+  oninput: (v: number) => void,
+  onchange: (v: number) => void,
+)}
+  <div class="ctl range">
+    <input
+      type="range"
+      {min}
+      {max}
+      {step}
+      {value}
+      aria-label={label}
+      style:--fill={fill(value, min, max)}
+      oninput={(e) => oninput(+e.currentTarget.value)}
+      onchange={(e) => onchange(+e.currentTarget.value)}
+    />
+    <output>{out}</output>
+  </div>
+{/snippet}
+
 <div class="page">
   <header class="bar">
     <button type="button" class="back" aria-label="Torna ai suoni" onclick={onclose}><ArrowLeft size={18} /></button>
@@ -214,7 +259,7 @@
             <div class="row">
               <div class="text">
                 <span class="t">Cuffie</span>
-                <span class="d">Quello che senti tu. Di solito il dispositivo predefinito di {OS_NAME}.</span>
+                <span class="d">Quello che senti tu.</span>
               </div>
               <Select
                 class="ctl wide"
@@ -227,11 +272,7 @@
             <div class="row">
               <div class="text">
                 <span class="t">Microfono virtuale</span>
-                <span class="d"
-                  >{isMac
-                    ? 'Quello che sentono gli altri: BlackHole, che Discord usa come microfono.'
-                    : "Quello che sentono gli altri: l'ingresso di VB-Cable (CABLE Input)."}</span
-                >
+                <span class="d">Quello che sentono gli altri: {isMac ? 'BlackHole' : 'CABLE Input di VB-Cable'}.</span>
               </div>
               <Select
                 class="ctl wide"
@@ -248,14 +289,22 @@
                 <button type="button" class="sm" onclick={() => (app.guideOpen = true)}>Apri la guida</button>
               </div>
             {/if}
+          </div>
+        </section>
+
+        <!-- ------------------------------------------------------------ Voce -->
+        <section id="set-voice" aria-labelledby="h-voice">
+          <h2 id="h-voice">Voce</h2>
+          <p class="lead">
+            Come arriva la tua voce agli altri. {bridged
+              ? `MicFX la manda in ${CABLE_NAME} insieme ai suoni, già pulita e allo stesso volume.`
+              : 'Ora la manda Windows con "Ascolta questo dispositivo"; con la riduzione del rumore la manda MicFX.'}
+          </p>
+          <div class="card">
             <div class="row">
               <div class="text">
                 <span class="t">Riduzione del rumore</span>
-                <span class="d"
-                  >Toglie dalla tua voce tastiera, ventole e rumori di fondo, come Krisp su Discord, ma non tocca i suoni.{isMac
-                    ? ''
-                    : ' La voce la manda MicFX: "Ascolta questo dispositivo" va spento.'}</span
-                >
+                <span class="d">Toglie tastiera, ventole e rumori di fondo dalla tua voce. I suoni restano intatti.</span>
               </div>
               <div class="ctl">
                 <Switch checked={s.mic.noise_suppression} label="Riduzione del rumore" onchange={(v) => app.setNoiseSuppression(v)} />
@@ -264,95 +313,88 @@
             {#if listenOn}
               <div class="row callout">
                 <TriangleAlert size={16} />
-                <span class="grow">"Ascolta questo dispositivo" è ancora acceso: su Discord la tua voce arriva due volte, una senza filtro.</span>
+                <span class="grow">"Ascolta questo dispositivo" è ancora acceso: la tua voce arriva due volte, una senza filtro.</span>
                 <button type="button" class="sm" onclick={() => api.openSoundSettings(1)}>Apri scheda Registrazione</button>
               </div>
             {/if}
-            {#if isMac || s.mic.noise_suppression}
+            {#if bridged}
               <div class="row">
                 <div class="text">
-                  <span class="t">La tua voce</span>
-                  <span class="d">Il microfono che MicFX manda dentro {CABLE_NAME} insieme ai suoni, così su Discord ti sentono.</span>
+                  <span class="t">Microfono</span>
+                  <span class="d">Quello in cui parli.</span>
                 </div>
                 <Select
                   class="ctl wide"
-                  label="La tua voce"
+                  label="Microfono"
                   value={s.mic.device_id ?? ''}
                   options={micOptions(app.mics)}
                   onchange={(v) => app.updateSettings({ mic: { device_id: v || null } })}
                 />
               </div>
             {/if}
+            {#if s.mic.noise_suppression}
+              <div class="row">
+                <div class="text">
+                  <span class="t">Intensità</span>
+                  <span class="d">{STRENGTH_HELP}</span>
+                </div>
+                <div class="ctl strength">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="10"
+                    value={strengthNow}
+                    aria-label="Intensità della riduzione del rumore"
+                    aria-valuetext={STRENGTH_HELP.split(':')[0]}
+                    style:--fill={fill(strengthNow, 0, 100)}
+                    oninput={(e) => {
+                      strength = +e.currentTarget.value;
+                      void app.updateSettings({ mic: { noise_strength: strength } });
+                    }}
+                    onchange={() => (strength = null)}
+                  />
+                  <span class="ends" aria-hidden="true"><span>Leggera</span><span>Forte</span></span>
+                </div>
+              </div>
+            {/if}
             <div class="row">
               <div class="text">
-                <span class="t">Configurazione con Discord</span>
+                <span class="t">Prova il microfono</span>
+                <span class="d"
+                  >{app.micTest
+                    ? 'Parla: ti senti come ti sentono gli altri. Muovi l’intensità per confrontare.'
+                    : 'Ti senti in cuffia come ti sentono gli altri. Usa le cuffie, non le casse.'}</span
+                >
+              </div>
+              <button type="button" class="ctl test" class:on={app.micTest} aria-pressed={app.micTest} onclick={() => app.setMicTest(!app.micTest)}>
+                {#if app.micTest}<Square size={13} /> Smetti{:else}<Ear size={15} /> Ascoltati{/if}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ------------------------------------------------------------ Discord -->
+        <section id="set-discord" aria-labelledby="h-discord">
+          <h2 id="h-discord">Discord</h2>
+          <p class="lead">Discord ascolta il microfono virtuale: lì arrivano insieme la tua voce e i suoni.</p>
+          <div class="card">
+            <div class="row">
+              <div class="text">
+                <span class="t">Configurazione guidata</span>
                 <span class="d">I passaggi da fare una volta sola, con le verifiche automatiche.</span>
               </div>
               <button type="button" class="ctl" onclick={() => (app.guideOpen = true)}><BookOpen size={15} /> Apri la guida</button>
             </div>
           </div>
-        </section>
 
-        <!-- ------------------------------------------------------------ Scorciatoie -->
-        <section id="set-hotkeys" aria-labelledby="h-hotkeys">
-          <h2 id="h-hotkeys">Scorciatoie globali</h2>
-          <p class="lead">
-            Funzionano ovunque, anche con MicFX {isMac ? 'nella barra dei menu' : 'nella tray'} e nei giochi a schermo intero. Quelle dei singoli suoni si impostano dal
-            suono, con <kbd>{kb('Ctrl')}</kbd> <kbd>{kb('Invio')}</kbd>.
-          </p>
-          <div class="card">
-            {#each GLOBAL as g (g.action.type)}
-              <div class="row">
-                <div class="text">
-                  <span class="t">{g.label}</span>
-                  <span class="d">{g.help}</span>
-                </div>
-                <div class="ctl"><HotkeyInput action={g.action} label={g.label} compact /></div>
-              </div>
-            {/each}
-            <div class="row">
-              <div class="text">
-                <span class="t">Scorciatoie della finestra</span>
-                <span class="d">Tastiera dentro MicFX: frecce, Invio, F2, Canc e le altre.</span>
-              </div>
-              <button type="button" class="ctl" onclick={() => (app.shortcutsOpen = true)}><Keyboard size={15} /> Mostra elenco</button>
-            </div>
-          </div>
-        </section>
-
-        <!-- ------------------------------------------------------------ Riproduzione -->
-        <section id="set-playback" aria-labelledby="h-playback">
-          <h2 id="h-playback">Riproduzione</h2>
-          <p class="lead">Cosa succede quando premi un suono. Ogni suono può avere una modalità sua.</p>
-          <div class="card">
-            <div class="row">
-              <div class="text">
-                <span class="t">Modalità predefinita</span>
-                <span class="d">{MODE_HELP[s.playback.default_mode]}</span>
-              </div>
-              <Select
-                class="ctl"
-                label="Modalità predefinita"
-                value={s.playback.default_mode}
-                options={MODES}
-                onchange={(v) => app.updateSettings({ playback: { default_mode: v } })}
-              />
-            </div>
-          </div>
-        </section>
-
-        <!-- ------------------------------------------------------------ PTT -->
-        <section id="set-ptt" aria-labelledby="h-ptt">
-          <h2 id="h-ptt">Push-to-talk di Discord</h2>
-          <p class="lead">
-            Se in Discord usi il push-to-talk, MicFX tiene premuto il tuo tasto mentre un suono va agli altri e lo rilascia subito
-            dopo. Con "Attività vocale" non serve.
-          </p>
+          <h3 class="sub">Push-to-talk</h3>
+          <p class="lead">Se in Discord usi il push-to-talk, MicFX tiene premuto il tuo tasto mentre un suono va agli altri. Con "Attività vocale" non serve.</p>
           <div class="card">
             <div class="row">
               <div class="text">
                 <span class="t">Tasto di Discord</span>
-                <span class="d">Lo stesso che hai impostato in Discord → Tasti di scelta rapida.</span>
+                <span class="d">Lo stesso di Discord → Tasti di scelta rapida.</span>
               </div>
               <div class="ctl inline">
                 <button
@@ -383,36 +425,34 @@
             </div>
             <div class="row">
               <div class="text">
-                <span class="t">Relay push-to-talk</span>
-                <span class="d">{s.ptt.key ? 'Premi il tasto in automatico mentre un suono va agli altri.' : 'Scegli prima il tasto di Discord.'}</span>
+                <span class="t">Premi il tasto durante i suoni</span>
+                <span class="d">{s.ptt.key ? 'Lo rilascia subito dopo.' : 'Scegli prima il tasto di Discord.'}</span>
               </div>
               <div class="ctl">
-                <Switch checked={s.ptt.enabled} label="Relay push-to-talk" disabled={!s.ptt.key} onchange={(v) => app.updateSettings({ ptt: { enabled: v } })} />
+                <Switch checked={s.ptt.enabled} label="Premi il tasto durante i suoni" disabled={!s.ptt.key} onchange={(v) => app.updateSettings({ ptt: { enabled: v } })} />
               </div>
             </div>
-            <div class="row">
-              <div class="text">
-                <span class="t">Rilascio dopo il suono</span>
-                <span class="d">Margine prima di lasciare il tasto, perché la coda del suono arrivi intera.</span>
-              </div>
-              <div class="ctl range">
-                <input
-                  type="range"
-                  min="0"
-                  max="1000"
-                  step="50"
-                  value={tail ?? s.ptt.tail_ms}
-                  aria-label="Rilascio dopo il suono"
-                  style:--fill={fill(tail ?? s.ptt.tail_ms, 0, 1000)}
-                  oninput={(e) => (tail = +e.currentTarget.value)}
-                  onchange={async (e) => {
-                    await app.updateSettings({ ptt: { tail_ms: +e.currentTarget.value } });
+            {#if s.ptt.enabled}
+              <div class="row">
+                <div class="text">
+                  <span class="t">Rilascio dopo il suono</span>
+                  <span class="d">Margine perché la coda del suono arrivi intera.</span>
+                </div>
+                {@render range(
+                  tail ?? s.ptt.tail_ms,
+                  0,
+                  1000,
+                  50,
+                  'Rilascio dopo il suono',
+                  `${tail ?? s.ptt.tail_ms} ms`,
+                  (v) => (tail = v),
+                  async (v) => {
+                    await app.updateSettings({ ptt: { tail_ms: v } });
                     tail = null;
-                  }}
-                />
-                <output>{tail ?? s.ptt.tail_ms} ms</output>
+                  },
+                )}
               </div>
-            </div>
+            {/if}
             <p class="foot">
               {isMac
                 ? 'Serve il permesso Accessibilità: Impostazioni di Sistema → Privacy e sicurezza → Accessibilità → MicFX.'
@@ -421,38 +461,79 @@
           </div>
         </section>
 
-        <!-- ------------------------------------------------------------ Import -->
-        <section id="set-import" aria-labelledby="h-import">
-          <h2 id="h-import">Importazione</h2>
+        <!-- ------------------------------------------------------------ Scorciatoie -->
+        <section id="set-hotkeys" aria-labelledby="h-hotkeys">
+          <h2 id="h-hotkeys">Scorciatoie</h2>
+          <p class="lead">
+            Funzionano ovunque, anche con MicFX {TRAY} e nei giochi. Quelle dei singoli suoni si impostano dal suono, con
+            <kbd>{kb('Ctrl')}</kbd> <kbd>{kb('Invio')}</kbd>.
+          </p>
+          <div class="card">
+            {#each GLOBAL as g (g.action.type)}
+              <div class="row">
+                <div class="text">
+                  <span class="t">{g.label}</span>
+                  <span class="d">{g.help}</span>
+                </div>
+                <div class="ctl"><HotkeyInput action={g.action} label={g.label} compact /></div>
+              </div>
+            {/each}
+            <div class="row">
+              <div class="text">
+                <span class="t">Tasti della finestra</span>
+                <span class="d">Frecce, Invio, F2, Canc e gli altri dentro MicFX.</span>
+              </div>
+              <button type="button" class="ctl" onclick={() => (app.shortcutsOpen = true)}><Keyboard size={15} /> Mostra elenco</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ------------------------------------------------------------ Suoni -->
+        <section id="set-sounds" aria-labelledby="h-sounds">
+          <h2 id="h-sounds">Suoni</h2>
+          <p class="lead">Cosa succede quando premi un suono. Ogni suono può avere una modalità sua.</p>
+          <div class="card">
+            <div class="row">
+              <div class="text">
+                <span class="t">Modalità predefinita</span>
+                <span class="d">{MODE_HELP[s.playback.default_mode]}</span>
+              </div>
+              <Select
+                class="ctl"
+                label="Modalità predefinita"
+                value={s.playback.default_mode}
+                options={MODES}
+                onchange={(v) => app.updateSettings({ playback: { default_mode: v } })}
+              />
+            </div>
+          </div>
+
+          <h3 class="sub">Nuovi suoni</h3>
           <p class="lead">Come vengono preparati i file che aggiungi. Valgono per i prossimi import.</p>
           <div class="card">
             <div class="row">
               <div class="text">
                 <span class="t">Volume di riferimento</span>
-                <span class="d">Tutti i suoni vengono livellati a questo volume. Più alto = suoni più forti.</span>
+                <span class="d">Tutti i suoni vengono livellati qui. Più alto = più forti.</span>
               </div>
-              <div class="ctl range">
-                <input
-                  type="range"
-                  min="-30"
-                  max="-10"
-                  step="1"
-                  value={lufs ?? s.loudness.target_lufs}
-                  aria-label="Volume di riferimento in LUFS"
-                  style:--fill={fill(lufs ?? s.loudness.target_lufs, -30, -10)}
-                  oninput={(e) => (lufs = +e.currentTarget.value)}
-                  onchange={async (e) => {
-                    await app.updateSettings({ loudness: { target_lufs: +e.currentTarget.value } });
-                    lufs = null;
-                  }}
-                />
-                <output>{lufs ?? s.loudness.target_lufs} LUFS</output>
-              </div>
+              {@render range(
+                lufs ?? s.loudness.target_lufs,
+                -30,
+                -10,
+                1,
+                'Volume di riferimento in LUFS',
+                `${lufs ?? s.loudness.target_lufs} LUFS`,
+                (v) => (lufs = v),
+                async (v) => {
+                  await app.updateSettings({ loudness: { target_lufs: v } });
+                  lufs = null;
+                },
+              )}
             </div>
             <div class="row">
               <div class="text">
                 <span class="t">Taglia il silenzio</span>
-                <span class="d">Toglie il silenzio all'inizio e alla fine, così il suono parte subito.</span>
+                <span class="d">Il suono parte subito, senza silenzio all'inizio e alla fine.</span>
               </div>
               <div class="ctl">
                 <Switch
@@ -478,17 +559,15 @@
           </div>
         </section>
 
-        <!-- ------------------------------------------------------------ Avvio -->
-        <section id="set-startup" aria-labelledby="h-startup">
-          <h2 id="h-startup">Avvio e finestra</h2>
-          <p class="lead">
-            Chiudendo la finestra MicFX resta {isMac ? 'nella barra dei menu' : 'nella tray'} e le scorciatoie continuano a funzionare.
-          </p>
+        <!-- ------------------------------------------------------------ Generale -->
+        <section id="set-general" aria-labelledby="h-general">
+          <h2 id="h-general">Generale</h2>
+          <p class="lead">Chiudendo la finestra MicFX resta {TRAY} e le scorciatoie continuano a funzionare.</p>
           <div class="card">
             <div class="row">
               <div class="text">
                 <span class="t">{isMac ? "Avvia all'accesso" : 'Avvia con Windows'}</span>
-                <span class="d">Parte nascosto {isMac ? 'nella barra dei menu' : 'nella tray'}, pronto con le scorciatoie.</span>
+                <span class="d">Parte nascosto {TRAY}, pronto con le scorciatoie.</span>
               </div>
               <div class="ctl">
                 <Switch checked={s.startup.autostart} label={isMac ? "Avvia all'accesso" : 'Avvia con Windows'} onchange={(v) => app.updateSettings({ startup: { autostart: v } })} />
@@ -496,83 +575,32 @@
             </div>
             <div class="row">
               <div class="text">
-                <span class="t">Avvisa quando esce una nuova versione</span>
-                <span class="d">All'apertura della finestra MicFX controlla su GitHub, al massimo ogni 6 ore.</span>
+                <span class="t">Avvisa delle nuove versioni</span>
+                <span class="d">All'apertura della finestra, al massimo ogni 6 ore.</span>
               </div>
               <div class="ctl">
-                <Switch checked={app.prefs.updateNotify} label="Avvisa quando esce una nuova versione" onchange={(v) => app.setPrefs({ updateNotify: v })} />
+                <Switch checked={app.prefs.updateNotify} label="Avvisa delle nuove versioni" onchange={(v) => app.setPrefs({ updateNotify: v })} />
               </div>
             </div>
             <div class="row">
               <div class="text">
                 <span class="t">Finestra pronta dopo la chiusura</span>
-                <span class="d">Per quanto la finestra resta in memoria per riaprirsi all'istante. 0 = libera subito la memoria.</span>
+                <span class="d">Resta in memoria per riaprirsi all'istante. 0 = libera subito la memoria.</span>
               </div>
-              <div class="ctl range">
-                <input
-                  type="range"
-                  min="0"
-                  max="300"
-                  step="10"
-                  value={keepalive ?? s.ui.keepalive_s}
-                  aria-label="Secondi in cui la finestra resta pronta"
-                  style:--fill={fill(keepalive ?? s.ui.keepalive_s, 0, 300)}
-                  oninput={(e) => (keepalive = +e.currentTarget.value)}
-                  onchange={async (e) => {
-                    await app.updateSettings({ ui: { keepalive_s: +e.currentTarget.value } });
-                    keepalive = null;
-                  }}
-                />
-                <output>{keepalive ?? s.ui.keepalive_s} s</output>
-              </div>
+              {@render range(
+                keepalive ?? s.ui.keepalive_s,
+                0,
+                300,
+                10,
+                'Secondi in cui la finestra resta pronta',
+                `${keepalive ?? s.ui.keepalive_s} s`,
+                (v) => (keepalive = v),
+                async (v) => {
+                  await app.updateSettings({ ui: { keepalive_s: v } });
+                  keepalive = null;
+                },
+              )}
             </div>
-          </div>
-        </section>
-
-        <!-- ------------------------------------------------------------ Dati -->
-        <section id="set-data" aria-labelledby="h-data">
-          <h2 id="h-data">Dati e diagnostica</h2>
-          <p class="lead">Libreria e impostazioni sono salvate su questo PC e restano identiche se aggiorni o reinstalli MicFX.</p>
-          <div class="card">
-            <div class="row">
-              <div class="text">
-                <span class="t">Cartella della libreria</span>
-                <span class="d path selectable">{app.info?.library_dir}</span>
-              </div>
-              <button type="button" class="ctl" onclick={() => api.openDataFolder()}><FolderOpen size={15} /> Apri cartella</button>
-            </div>
-            <div class="row">
-              <div class="text">
-                <span class="t">Diagnostica audio</span>
-                <span class="d">Stato delle uscite, interruzioni dell'audio ed errori. Utile per segnalare un problema.</span>
-              </div>
-              <button type="button" class="ctl" disabled={diagLoading} onclick={loadDiag}><Activity size={15} /> {diag ? 'Aggiorna' : 'Esegui'}</button>
-            </div>
-            {#if diag}
-              <div class="diag">
-                <table>
-                  <thead>
-                    <tr><th>Uscita</th><th>Stato</th><th>Dispositivo</th><th>Voci</th><th>Underrun</th><th>Errori</th><th>Mix</th></tr>
-                  </thead>
-                  <tbody>
-                    {#each diag.buses as b (b.bus)}
-                      <tr>
-                        <td>{b.bus === 'cable' ? 'Microfono' : 'Cuffie'}</td>
-                        <td><span class="state" class:ok={b.state === 'running'}>{b.state}</span></td>
-                        <td class="dev">{b.device || '—'}</td>
-                        <td>{b.voices}</td>
-                        <td class:bad={b.underruns > 0}>{b.underruns}</td>
-                        <td class:bad={b.errors > 0}>{b.errors}</td>
-                        <td>{b.mix_rate ? `${b.mix_rate / 1000} kHz` : '—'}</td>
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-                <p class="foot">
-                  {diag.sounds} suoni · {diag.playing} in riproduzione · push-to-talk {diag.ptt_down ? 'premuto' : 'rilasciato'}
-                </p>
-              </div>
-            {/if}
           </div>
         </section>
 
@@ -602,10 +630,48 @@
               </div>
               <button type="button" class="ctl" onclick={() => api.openLink('github')}><ExternalLink size={15} /> Apri su GitHub</button>
             </div>
+            <div class="row">
+              <div class="text">
+                <span class="t">Libreria e impostazioni</span>
+                <span class="d path selectable" title={app.info?.library_dir}>{app.info?.library_dir}</span>
+              </div>
+              <button type="button" class="ctl" onclick={() => api.openDataFolder()}><FolderOpen size={15} /> Apri cartella</button>
+            </div>
+            <div class="row">
+              <div class="text">
+                <span class="t">Diagnostica audio</span>
+                <span class="d">Stato delle uscite, interruzioni ed errori. Utile per segnalare un problema.</span>
+              </div>
+              <button type="button" class="ctl" disabled={diagLoading} onclick={loadDiag}><Activity size={15} /> {diag ? 'Aggiorna' : 'Esegui'}</button>
+            </div>
+            {#if diag}
+              <div class="diag">
+                <table>
+                  <thead>
+                    <tr><th>Uscita</th><th>Stato</th><th>Dispositivo</th><th>Voci</th><th>Underrun</th><th>Errori</th><th>Mix</th></tr>
+                  </thead>
+                  <tbody>
+                    {#each diag.buses as b (b.bus)}
+                      <tr>
+                        <td>{b.bus === 'cable' ? 'Microfono' : 'Cuffie'}</td>
+                        <td><span class="state" class:ok={b.state === 'running'}>{b.state}</span></td>
+                        <td class="dev">{b.device || '—'}</td>
+                        <td>{b.voices}</td>
+                        <td class:bad={b.underruns > 0}>{b.underruns}</td>
+                        <td class:bad={b.errors > 0}>{b.errors}</td>
+                        <td>{b.mix_rate ? `${b.mix_rate / 1000} kHz` : '—'}</td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+                <p class="foot">
+                  {diag.sounds} suoni · {diag.playing} in riproduzione · push-to-talk {diag.ptt_down ? 'premuto' : 'rilasciato'}
+                </p>
+              </div>
+            {/if}
           </div>
           <p class="note">
-            Per aggiornare scarica l'ultima versione da GitHub e installala sopra questa: libreria, scorciatoie e impostazioni
-            restano al loro posto.
+            Libreria, scorciatoie e impostazioni restano su questo {isMac ? 'Mac' : 'PC'}, identiche se aggiorni o reinstalli MicFX.
           </p>
         </section>
       </div>
@@ -736,6 +802,12 @@
   .lead kbd {
     height: 18px;
   }
+  /* Sottogruppo dentro una sezione (Push-to-talk, Nuovi suoni). */
+  .sub {
+    margin-top: 22px;
+    font-size: var(--text-base);
+    font-weight: 600;
+  }
 
   /* --- schede e righe --- */
   .card {
@@ -810,6 +882,38 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
+  /* Intensità della riduzione del rumore: niente numeri, gli estremi a parole sotto il cursore. */
+  .strength {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 220px;
+  }
+  .strength input {
+    width: 100%;
+  }
+  .ends {
+    display: flex;
+    justify-content: space-between;
+    color: var(--fg-faint);
+    font-size: var(--text-xs);
+  }
+  /* Prova del microfono: acceso, il pulsante resta evidenziato finché non lo fermi. */
+  .test {
+    min-width: 116px;
+  }
+  .test.on,
+  .test.on:hover:not(:disabled) {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary-text);
+    animation: listening 1.6s var(--ease) infinite;
+  }
+  @keyframes listening {
+    50% {
+      box-shadow: 0 0 0 4px var(--primary-soft-2);
+    }
+  }
   .callout {
     display: flex;
     align-items: center;
@@ -831,6 +935,9 @@
   }
   .links {
     margin-top: 10px;
+  }
+  .links .text {
+    max-width: 100%;
   }
   .note {
     margin-top: 10px;

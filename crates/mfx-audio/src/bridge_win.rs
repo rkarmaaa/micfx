@@ -28,7 +28,7 @@ use crate::CHANNELS;
 use crate::bus::open_client;
 use crate::event::{Event, Wait, wait_any};
 use crate::sink::DeviceId;
-use crate::voice::{self, Denoise, VoiceOut};
+use crate::voice::{self, AtomicF32, VoiceChain, VoiceOut};
 
 /// Silenzio per i pacchetti che il driver segna come muti.
 static ZEROS: [f32; 1024] = [0.0; 1024];
@@ -41,21 +41,30 @@ pub struct MicBridge {
 
 impl MicBridge {
     /// Avvia il bridge. `mic_id = None` = microfono predefinito di Windows. Con `muted` a `true` la
-    /// voce non passa (rampa di 10 ms); con `denoise` passa dalla riduzione del rumore.
-    pub fn start(mic_id: Option<&str>, cable_id: &str, denoise: bool, muted: Arc<AtomicBool>) -> Result<Self, String> {
+    /// voce non passa (rampa di 10 ms); con `denoise` (limite in dB, regolabile dal vivo) passa dalla
+    /// riduzione del rumore. `output_id = None` = uscita predefinita (la prova del microfono in cuffia).
+    pub fn start(
+        mic_id: Option<&str>,
+        output_id: Option<&str>,
+        denoise: Option<Arc<AtomicF32>>,
+        muted: Arc<AtomicBool>,
+    ) -> Result<Self, String> {
         let mic = match mic_id {
             Some(id) => DeviceId::new(id).ok_or("ID del microfono troppo lungo")?,
             None => DeviceId::DEFAULT,
         };
-        let cable = DeviceId::new(cable_id).ok_or("ID del cavo troppo lungo")?;
+        let output = match output_id {
+            Some(id) => DeviceId::new(id).ok_or("ID dell'uscita troppo lungo")?,
+            None => DeviceId::DEFAULT,
+        };
         let stop = Arc::new(Event::new().map_err(|e| e.to_string())?);
         let alive = Arc::new(AtomicBool::new(true));
-        // La rete si costruisce qui (alloca), prima del thread audio.
-        let denoise = denoise.then(Denoise::new);
+        // La catena (e la rete, se serve) si costruisce qui: alloca, prima del thread audio.
+        let chain = VoiceChain::new(denoise);
         let (tx, rx) = voice::ring();
         let (ready_tx, ready_rx) = sync_channel(1);
         let ctx =
-            Bridge { mic, cable, denoise, tx, out: VoiceOut::new(rx, muted), stop: stop.clone(), alive: alive.clone() };
+            Bridge { mic, output, chain, tx, out: VoiceOut::new(rx, muted), stop: stop.clone(), alive: alive.clone() };
         let thread = std::thread::Builder::new()
             .name("mfx-voice".into())
             .spawn(move || ctx.run(ready_tx))
@@ -87,8 +96,8 @@ impl Drop for MicBridge {
 
 struct Bridge {
     mic: DeviceId,
-    cable: DeviceId,
-    denoise: Option<Denoise>,
+    output: DeviceId,
+    chain: VoiceChain,
     tx: Producer<f32>,
     out: VoiceOut,
     stop: Arc<Event>,
@@ -147,8 +156,8 @@ impl Bridge {
         let render_event = Event::new().map_err(|e| e.to_string())?;
         // SAFETY: COM inizializzato; gli eventi vivono quanto gli Streams.
         unsafe {
-            let (render_client, _) = open_client(&self.cable, eRender, CHANNELS as u16, render_event.handle())
-                .map_err(|e| format!("uscita sul cavo: {e}"))?;
+            let (render_client, _) = open_client(&self.output, eRender, CHANNELS as u16, render_event.handle())
+                .map_err(|e| format!("uscita: {e}"))?;
             let (capture_client, _) = open_client(&self.mic, eCapture, 1, capture_event.handle())
                 .map_err(|e| format!("cattura del microfono: {e}"))?;
             start(capture_client, render_client, capture_event, render_event)
@@ -170,9 +179,9 @@ impl Bridge {
         }
     }
 
-    /// Legge tutti i pacchetti pronti e li passa (filtrati, se serve) al ring della voce.
+    /// Legge tutti i pacchetti pronti e li passa, dopo la catena della voce, al ring.
     unsafe fn capture(&mut self, s: &Streams) -> windows::core::Result<()> {
-        let Self { denoise, tx, .. } = self;
+        let Self { chain, tx, .. } = self;
         let mut emit = |f: &[f32]| voice::push(tx, f);
         // SAFETY: interfacce valide; il buffer di GetBuffer è leggibile per `frames` campioni mono
         // fino a ReleaseBuffer.
@@ -185,10 +194,10 @@ impl Bridge {
                 let n = frames as usize;
                 if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 || data.is_null() {
                     for k in (0..n).step_by(ZEROS.len()) {
-                        feed(denoise, &ZEROS[..(n - k).min(ZEROS.len())], &mut emit);
+                        chain.process(&ZEROS[..(n - k).min(ZEROS.len())], &mut emit);
                     }
                 } else {
-                    feed(denoise, std::slice::from_raw_parts(data as *const f32, n), &mut emit);
+                    chain.process(std::slice::from_raw_parts(data as *const f32, n), &mut emit);
                 }
                 s.capture.ReleaseBuffer(frames)?;
             }
@@ -214,14 +223,6 @@ unsafe fn start(
         render_client.Start()?;
         capture_client.Start()?;
         Ok(Streams { capture_client, capture, render_client, render, render_frames, capture_event, render_event })
-    }
-}
-
-#[inline]
-fn feed(denoise: &mut Option<Denoise>, samples: &[f32], emit: &mut impl FnMut(&[f32])) {
-    match denoise {
-        Some(d) => d.process(samples, emit),
-        None => emit(samples),
     }
 }
 

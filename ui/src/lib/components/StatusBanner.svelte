@@ -51,7 +51,7 @@
           <button type="button" class="ghost sm" onclick={() => app.hideBanner(code)}>Non mostrare più</button>
         {/if}
       {:else if code === 'discord_push_to_talk'}
-        <button type="button" class="primary sm" onclick={() => app.openSettings('ptt')}>Apri impostazioni</button>
+        <button type="button" class="primary sm" onclick={() => app.openSettings('discord')}>Apri impostazioni</button>
       {:else if code === 'default_is_cable'}
         <button type="button" class="primary sm" onclick={() => api.openSoundSettings(0)}>Apri impostazioni audio</button>
       {:else}

@@ -24,7 +24,7 @@ use crate::SAMPLE_RATE;
 use crate::coreaudio::sys::*;
 use crate::coreaudio::{self, dispose_unit, float_format, new_hal_unit, set_unit_prop};
 use crate::event::{Event, Wait};
-use crate::voice::{self, Denoise, VoiceOut};
+use crate::voice::{self, AtomicF32, VoiceChain, VoiceOut};
 
 /// Frame massimi per callback di cattura (buffer preallocato).
 const CAPTURE_MAX_FRAMES: usize = 8192;
@@ -47,7 +47,9 @@ struct CaptureState {
     channels: u32,
     rs: Resampler,
     tx: Producer<f32>,
-    /// Sveglia il thread della riduzione del rumore, se c'è.
+    /// Senza riduzione del rumore la catena (solo livellamento, leggero) gira qui; con la riduzione
+    /// gira nel thread del filtro, che questa callback sveglia.
+    chain: Option<VoiceChain>,
     wake: Option<Arc<Event>>,
 }
 
@@ -82,32 +84,38 @@ impl Resampler {
 
 impl MicBridge {
     /// Avvia il bridge. `mic_uid = None` = microfono predefinito di macOS. Con `muted` a `true` la
-    /// voce non passa (rampa di 10 ms); con `denoise` passa dalla riduzione del rumore.
+    /// voce non passa (rampa di 10 ms); con `denoise` (limite in dB, regolabile dal vivo) passa dalla
+    /// riduzione del rumore. `output_uid = None` = uscita predefinita (la prova del microfono in cuffia).
     pub fn start(
         mic_uid: Option<&str>,
-        cable_uid: &str,
-        denoise: bool,
+        output_uid: Option<&str>,
+        denoise: Option<Arc<AtomicF32>>,
         muted: Arc<AtomicBool>,
     ) -> Result<Self, String> {
-        let cable = coreaudio::device_by_uid(cable_uid).ok_or("cavo virtuale non trovato")?;
+        let output = match output_uid {
+            Some(uid) => coreaudio::device_by_uid(uid),
+            None => coreaudio::default_device(true),
+        }
+        .ok_or("uscita non trovata")?;
         let mic = match mic_uid {
             Some(uid) => coreaudio::device_by_uid(uid),
             None => coreaudio::default_device(false),
         }
         .ok_or("nessun microfono")?;
-        if mic == cable {
-            return Err("il microfono scelto è il cavo virtuale".into());
+        if mic == output {
+            return Err("il microfono scelto è anche l'uscita".into());
         }
         let in_ch = coreaudio::channels(mic, false).clamp(1, 2);
         let in_rate = coreaudio::nominal_rate(mic).filter(|r| *r > 0.0).ok_or("frequenza del microfono sconosciuta")?;
 
         let (voice_tx, voice_rx) = voice::ring();
         // Con la riduzione del rumore la cattura scrive in un ring intermedio letto dal thread del filtro.
-        let (tx, denoise) = if denoise {
-            let (raw_tx, raw_rx) = voice::ring();
-            (raw_tx, Some(DenoiseThread::spawn(raw_rx, voice_tx)?))
-        } else {
-            (voice_tx, None)
+        let (tx, denoise) = match denoise {
+            Some(limit) => {
+                let (raw_tx, raw_rx) = voice::ring();
+                (raw_tx, Some(DenoiseThread::spawn(raw_rx, voice_tx, limit)?))
+            }
+            None => (voice_tx, None),
         };
         let capture = Box::into_raw(Box::new(CaptureState {
             unit: ptr::null_mut(),
@@ -115,6 +123,7 @@ impl MicBridge {
             channels: in_ch,
             rs: Resampler::new(in_rate),
             tx,
+            chain: denoise.is_none().then(|| VoiceChain::new(None)),
             wake: denoise.as_ref().map(|d| d.wake.clone()),
         }));
         let play = Box::into_raw(Box::new(VoiceOut::new(voice_rx, muted)));
@@ -126,7 +135,7 @@ impl MicBridge {
             denoise,
             mic_name: coreaudio::device_name(mic).unwrap_or_default(),
         };
-        b.output = open_output(cable, play).map_err(|e| format!("uscita sul cavo: {e}"))?;
+        b.output = open_output(output, play).map_err(|e| format!("uscita: {e}"))?;
         b.input = open_input(mic, in_ch, in_rate, capture).map_err(|e| format!("cattura del microfono: {e}"))?;
         // SAFETY: unità inizializzate; prima l'uscita, così la prima voce trova già chi la legge.
         unsafe {
@@ -140,6 +149,13 @@ impl MicBridge {
             }
         }
         Ok(b)
+    }
+}
+
+impl MicBridge {
+    /// Stessa API del bridge di Windows: le AUHAL seguono da sole i cambi di formato, il bridge resta vivo.
+    pub fn is_alive(&self) -> bool {
+        true
     }
 }
 
@@ -165,11 +181,11 @@ impl Drop for MicBridge {
 }
 
 impl DenoiseThread {
-    fn spawn(mut rx: Consumer<f32>, mut tx: Producer<f32>) -> Result<Self, String> {
+    fn spawn(mut rx: Consumer<f32>, mut tx: Producer<f32>, limit: Arc<AtomicF32>) -> Result<Self, String> {
         let wake = Arc::new(Event::new().map_err(|e| e.to_string())?);
         let quit = Arc::new(AtomicBool::new(false));
         // La rete si costruisce qui (alloca), fuori da ogni thread audio.
-        let mut dn = Denoise::new();
+        let mut chain = VoiceChain::new(Some(limit));
         let (w, q) = (wake.clone(), quit.clone());
         let thread = std::thread::Builder::new()
             .name("mfx-voice-denoise".into())
@@ -185,8 +201,8 @@ impl DenoiseThread {
                     }
                     if let Ok(c) = rx.read_chunk(rx.slots()) {
                         let (a, b) = c.as_slices();
-                        dn.process(a, &mut emit);
-                        dn.process(b, &mut emit);
+                        chain.process(a, &mut emit);
+                        chain.process(b, &mut emit);
                         c.commit_all();
                     }
                 }
@@ -283,12 +299,15 @@ unsafe extern "C" fn input_cb(
         return r;
     }
     crate::enable_ftz_daz();
-    let CaptureState { buf, rs, tx, wake, .. } = st;
+    let CaptureState { buf, rs, tx, chain, wake, .. } = st;
     for f in buf[..n * ch].chunks_exact(ch) {
         // La voce è mono: i microfoni stereo si sommano a metà.
         let m = if ch == 1 { f[0] } else { (f[0] + f[1]) * 0.5 };
-        rs.feed(m, &mut |s| {
-            let _ = tx.push(s);
+        rs.feed(m, &mut |s| match chain {
+            Some(c) => c.process(&[s], &mut |out| voice::push(tx, out)),
+            None => {
+                let _ = tx.push(s);
+            }
         });
     }
     if let Some(w) = wake {

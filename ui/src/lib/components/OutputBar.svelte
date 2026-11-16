@@ -3,7 +3,7 @@
   // Il nome del dispositivo apre l'elenco dei dispositivi; sotto quello del microfono, la riduzione del rumore.
   import { CABLE_NAME } from '../util/platform';
   import type { BusKind } from '../api';
-  import { Headphones, Mic, MicOff, TriangleAlert } from '../icons';
+  import { Ear, Headphones, Mic, MicOff, TriangleAlert } from '../icons';
   import { app } from '../stores/app.svelte';
   import { cableOptions, monitorOptions } from '../util/devices';
   import { MAX_PERCENT, formatDb, percentToDb } from '../util/volume';
@@ -74,6 +74,9 @@
       </span>
     </span>
   </label>
+  <button type="button" class="noise-more" onclick={() => app.openSettings('voice')}>
+    <Ear size={14} /> Intensità e prova del microfono
+  </button>
 {/snippet}
 
 <section class="dock" aria-label="Volumi" bind:this={dock}>
@@ -254,6 +257,23 @@
     gap: 4px;
     color: var(--fg-muted);
     font-size: var(--text-sm);
+  }
+  .noise-more {
+    justify-content: flex-start;
+    gap: 10px;
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    border: none;
+    background: none;
+    box-shadow: none;
+    color: var(--fg-muted);
+    font-size: var(--text-sm);
+    font-weight: 450;
+  }
+  .noise-more:hover:not(:disabled) {
+    background: var(--surface-2);
+    color: var(--fg);
   }
   .noise-hint :global(.lucide) {
     flex: none;

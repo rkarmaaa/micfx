@@ -94,6 +94,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             ipc::get_snapshot,
             ipc::recheck_setup,
+            ipc::set_mic_test,
             ipc::play_sound,
             ipc::preview_sound,
             ipc::stop_sound,

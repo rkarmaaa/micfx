@@ -161,6 +161,8 @@ pub struct Engine {
     ptt_down: Option<u16>,
     /// Voce silenziata perché suona un effetto con `mute_voice`.
     voice_muted: bool,
+    /// Prova del microfono in corso (si spegne quando la finestra si nasconde).
+    mic_test: bool,
     /// Microfoni silenziati da MicFX (modo Sistema), da riattivare quando la voce torna.
     muted_mics: Vec<String>,
     timers: Timers,
@@ -255,6 +257,7 @@ impl Engine {
             hotkeys_paused: false,
             ptt_down: None,
             voice_muted: false,
+            mic_test: false,
             muted_mics: Vec::new(),
             timers: Timers::default(),
             ui_open: false,
@@ -491,29 +494,46 @@ impl Engine {
         self.update_mic_bridge();
     }
 
-    /// Bridge del microfono (voce che passa da MicFX): il microfono scelto, se c'è ancora, altrimenti
-    /// il predefinito, mai il cavo. L'ID si risolve qui, così cambiare il predefinito sposta anche il bridge.
+    /// Il microfono della voce: quello scelto, se c'è ancora, altrimenti il predefinito, mai il cavo.
+    /// L'ID si risolve qui, così cambiare il predefinito sposta anche il bridge.
+    fn voice_mic(&self) -> Option<String> {
+        self.settings
+            .mic
+            .device_id
+            .as_deref()
+            .and_then(|id| self.mics.iter().find(|m| m.id == id))
+            .or_else(|| self.mics.iter().find(|m| m.is_default))
+            .or_else(|| self.mics.first())
+            .map(|m| m.id.clone())
+    }
+
+    /// Bridge della voce verso il cavo (voce che passa da MicFX) e prova del microfono in cuffia.
     fn update_mic_bridge(&mut self) {
         let mic = &self.settings.mic;
-        let route = if mic.bridged() {
-            let cable = self.effective_cable().map(|c| c.id.clone());
-            let mic_id = mic
-                .device_id
-                .as_deref()
-                .and_then(|id| self.mics.iter().find(|m| m.id == id))
-                .or_else(|| self.mics.iter().find(|m| m.is_default))
-                .or_else(|| self.mics.first())
-                .map(|m| m.id.clone());
-            match (cable, mic_id) {
-                (Some(cable_id), Some(mic_id)) => {
-                    Some(MicRoute { mic_id: Some(mic_id), cable_id, denoise: mic.noise_suppression })
-                }
-                _ => None,
+        self.platform.set_denoise_limit(mic.denoise_limit_db());
+        let denoise = mic.noise_suppression;
+        let main = match (mic.bridged(), self.effective_cable(), self.voice_mic()) {
+            (true, Some(cable), Some(mic_id)) => {
+                Some(MicRoute { mic_id: Some(mic_id), output_id: Some(cable.id.clone()), denoise })
             }
-        } else {
-            None
+            _ => None,
         };
-        self.platform.set_mic_bridge(route);
+        self.platform.set_mic_bridge(main);
+        // La prova suona nelle cuffie scelte, o nel predefinito (mai nel cavo).
+        let test = self.mic_test.then(|| self.voice_mic()).flatten().map(|mic_id| {
+            let headphones = self.settings.outputs.monitor.device_id.clone();
+            let output_id = headphones.filter(|id| self.devices.iter().any(|d| &d.id == id && !d.is_cable));
+            MicRoute { mic_id: Some(mic_id), output_id, denoise }
+        });
+        self.platform.set_mic_test(test);
+    }
+
+    /// Prova del microfono: accende o spegne l'ascolto della propria voce in cuffia.
+    pub(crate) fn set_mic_test(&mut self, on: bool) {
+        if self.mic_test != on {
+            self.mic_test = on;
+            self.update_mic_bridge();
+        }
     }
 
     fn reopen_default_monitor(&mut self) {
@@ -1359,12 +1379,14 @@ impl Engine {
 
     pub(crate) fn ui_hidden(&mut self) {
         self.set_window_focused(false);
+        self.set_mic_test(false);
         let secs = self.settings.ui.keepalive_s as u64;
         self.timers.ui_keepalive = Some(Instant::now() + Duration::from_secs(secs));
     }
 
     pub(crate) fn ui_closed(&mut self) {
         self.set_window_focused(false);
+        self.set_mic_test(false);
         self.ui_open = false;
         self.timers.ui_keepalive = None;
     }
@@ -1875,6 +1897,7 @@ impl Engine {
             self.platform.unregister_hotkey(h.id);
         }
         self.platform.set_mic_bridge(None);
+        self.platform.set_mic_test(None);
         tracing::info!("engine fermo");
     }
 }

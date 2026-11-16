@@ -10,4 +10,9 @@ device_id: string | null,
  * Riduzione del rumore sulla voce (non sui suoni). Su Windows accende il bridge: la voce la manda
  * MicFX e "Ascolta questo dispositivo" va spento.
  */
-noise_suppression: boolean, };
+noise_suppression: boolean, 
+/**
+ * Intensità della riduzione del rumore, 0–100: quanto può togliere al massimo (vedi
+ * [`Self::denoise_limit_db`]). Più bassa = voce più naturale, un po' di ambiente resta.
+ */
+noise_strength: number, };

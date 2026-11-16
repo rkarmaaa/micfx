@@ -25,8 +25,10 @@ struct World {
     /// Microfoni silenziati dal sistema (ID).
     muted_mics: Vec<String>,
     bridge_muted: Vec<bool>,
-    /// Ultimo bridge chiesto dall'engine.
+    /// Ultimo bridge chiesto dall'engine, e ultima prova del microfono.
     bridge: Option<MicRoute>,
+    mic_test: Option<MicRoute>,
+    denoise_limit: f32,
     mute_calls: Vec<(String, bool)>,
 }
 
@@ -75,6 +77,12 @@ impl Platform for FakePlatform {
     }
     fn set_mic_bridge(&mut self, route: Option<MicRoute>) {
         self.0.lock().unwrap().bridge = route;
+    }
+    fn set_mic_test(&mut self, route: Option<MicRoute>) {
+        self.0.lock().unwrap().mic_test = route;
+    }
+    fn set_denoise_limit(&mut self, db: f32) {
+        self.0.lock().unwrap().denoise_limit = db;
     }
     fn set_bridge_muted(&mut self, muted: bool) {
         self.0.lock().unwrap().bridge_muted.push(muted);
@@ -618,7 +626,7 @@ fn noise_suppression_bridges_the_routed_mic() {
     assert_eq!(s.mic.device_id.as_deref(), Some("mic"), "il microfono si ricorda");
     let route = h.world.lock().unwrap().bridge.clone().expect("bridge acceso");
     assert_eq!(route.mic_id.as_deref(), Some("mic"));
-    assert_eq!(route.cable_id, "{0.0.0.00000000}.{cable}");
+    assert_eq!(route.output_id.as_deref(), Some("{0.0.0.00000000}.{cable}"));
     assert!(route.denoise);
     let st = status();
     assert!(st.contains(&ErrorCode::MicListenOn) && !st.contains(&ErrorCode::MicNotRouted), "{st:?}");
@@ -626,6 +634,26 @@ fn noise_suppression_bridges_the_routed_mic() {
     h.core.update_settings(serde_json::json!({ "mic": { "noise_suppression": false } })).unwrap();
     assert!(h.world.lock().unwrap().bridge.is_none(), "senza filtro la voce torna ad \"Ascolta\"");
     assert!(!status().contains(&ErrorCode::MicListenOn));
+}
+
+/// Prova del microfono: la voce va nelle cuffie (predefinito), con lo stesso filtro, e si spegne
+/// quando la finestra si nasconde. L'intensità arriva ai bridge senza riaprirli.
+#[test]
+fn mic_test_plays_the_voice_in_the_headphones() {
+    let h = Harness::new();
+    h.core.update_settings(serde_json::json!({ "mic": { "noise_suppression": true, "noise_strength": 0 } })).unwrap();
+    assert_eq!(h.world.lock().unwrap().denoise_limit, 6.0);
+    h.core.set_mic_test(true).unwrap();
+    let test = h.world.lock().unwrap().mic_test.clone().expect("prova accesa");
+    assert_eq!(test.mic_id.as_deref(), Some("mic"));
+    assert_eq!(test.output_id, None, "cuffie: il predefinito");
+    assert!(test.denoise);
+    let main = h.world.lock().unwrap().bridge.clone();
+    h.core.update_settings(serde_json::json!({ "mic": { "noise_strength": 100 } })).unwrap();
+    assert_eq!(h.world.lock().unwrap().denoise_limit, 50.0);
+    assert_eq!(h.world.lock().unwrap().bridge, main, "l'intensità non riapre il bridge");
+    h.core.ui_hidden();
+    assert!(h.world.lock().unwrap().mic_test.is_none(), "finestra nascosta: prova spenta");
 }
 
 /// Con la voce nel bridge "Disattiva la mia voce" la azzera lì e non tocca i microfoni di sistema.

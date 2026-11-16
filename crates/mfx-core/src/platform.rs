@@ -11,6 +11,8 @@ use crate::api::{BusKind, Device};
 
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(any(windows, target_os = "macos"))]
+mod voices;
 #[cfg(windows)]
 mod windows;
 
@@ -46,12 +48,13 @@ pub struct BusParams {
     pub warm_hold_ms: u32,
 }
 
-/// Bridge del microfono: quale microfono mandare in quale cavo, e se filtrarne il rumore.
+/// Bridge del microfono: quale microfono mandare in quale uscita, e se filtrarne il rumore.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MicRoute {
     /// `None` = microfono predefinito del sistema.
     pub mic_id: Option<String>,
-    pub cable_id: String,
+    /// Il cavo, o le cuffie per la prova del microfono; `None` = uscita predefinita.
+    pub output_id: Option<String>,
     pub denoise: bool,
 }
 
@@ -74,6 +77,10 @@ pub trait Platform {
     fn set_mic_bridge(&mut self, _route: Option<MicRoute>) {}
     /// Azzera (con una rampa breve) o ridà la voce nel bridge. Le piattaforme senza bridge ignorano.
     fn set_bridge_muted(&mut self, _muted: bool) {}
+    /// Prova del microfono: la voce, con la stessa catena del bridge, nelle cuffie. `None` la spegne.
+    fn set_mic_test(&mut self, _route: Option<MicRoute>) {}
+    /// Intensità della riduzione del rumore (limite in dB): vale subito, senza riaprire i bridge.
+    fn set_denoise_limit(&mut self, _db: f32) {}
     /// Silenzia o riattiva un microfono di sistema. Restituisce lo stato di prima, `None` se non riesce.
     fn set_mic_mute(&mut self, _id: &str, _mute: bool) -> Option<bool> {
         None

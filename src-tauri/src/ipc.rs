@@ -29,6 +29,12 @@ pub async fn recheck_setup(core: State<'_, CoreHandle>) -> ApiResult<()> {
     blocking(&core, |c| c.recheck_setup()).await
 }
 
+/// Prova del microfono: la propria voce in cuffia (si spegne da sola quando la finestra si nasconde).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn set_mic_test(core: State<'_, CoreHandle>, on: bool) -> ApiResult<()> {
+    blocking(&core, move |c| c.set_mic_test(on)).await
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn play_sound(core: State<'_, CoreHandle>, sound_id: String) -> ApiResult<Option<u64>> {
     blocking(&core, move |c| c.play_sound(sound_id)).await

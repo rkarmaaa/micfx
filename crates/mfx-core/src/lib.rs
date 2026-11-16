@@ -200,6 +200,12 @@ impl CoreHandle {
         let _ = self.call(move |e| e.set_window_focused(focused));
     }
 
+    /// Prova del microfono: la propria voce in cuffia, come la sentono gli altri. Si spegne da sola
+    /// quando la finestra si nasconde.
+    pub fn set_mic_test(&self, on: bool) -> ApiResult<()> {
+        self.call(move |e| e.set_mic_test(on))
+    }
+
     pub fn ui_hidden(&self) {
         let _ = self.call(|e| e.ui_hidden());
     }

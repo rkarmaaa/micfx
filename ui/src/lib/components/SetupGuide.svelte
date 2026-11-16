@@ -57,12 +57,12 @@
         {#if isMac}
           <p>
             Lo fa MicFX: la voce di {bridgeMic ? `«${bridgeMic.name}»` : 'il tuo microfono'} arriva a {cableName} insieme ai suoni.
-            La prima volta macOS chiede il permesso per il microfono: consenti. Il microfono si cambia in Impostazioni → Audio.
+            La prima volta macOS chiede il permesso per il microfono: consenti. Microfono, intensità e prova in Impostazioni → Voce.
           </p>
         {:else if bridged && micOk}
           <p>
             Lo fa MicFX, con la riduzione del rumore: la voce di {bridgeMic ? `«${bridgeMic.name}»` : 'il tuo microfono'} arriva a CABLE
-            Input già filtrata. Il microfono si cambia in Impostazioni → Audio.
+            Input già filtrata. Microfono, intensità e prova in Impostazioni → Voce.
           </p>
         {:else if bridged}
           <p>
@@ -112,7 +112,7 @@
             {#if app.discord}{@render state(app.discord.krisp || app.discord.noise_suppression, 'ora attiva')}{/if}
           </li>
           <li>
-            Controllo automatico del guadagno: <em>spento</em> (abbassa i suoni)
+            Controllo automatico del guadagno: <em>spento</em> (abbassa i suoni; con la riduzione del rumore la voce la livella MicFX)
             {#if app.discord}{@render state(app.discord.automatic_gain_control, 'ora acceso')}{/if}
           </li>
           <li>

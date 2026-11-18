@@ -85,6 +85,7 @@ export const ERROR_TEXT: Partial<Record<ErrorCode, string>> = {
   outputs_disabled: 'Microfono e cuffie sono disattivati.',
   device_lost: 'Dispositivo audio non disponibile.',
   ptt_send_failed: isMac ? 'Push-to-talk bloccato: serve il permesso Accessibilità.' : 'Push-to-talk bloccato da Windows.',
+  update_failed: 'Aggiornamento non riuscito.',
   internal: 'Errore interno.',
 };
 

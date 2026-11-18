@@ -18,14 +18,9 @@ const NAMES: [string, string][] = [
 ];
 const N = Number(q.get('n') ?? NAMES.length);
 
-// Ultima release su GitHub: `?update=1.2.0` simula una nuova versione, altrimenti nessuna.
-const realFetch = window.fetch.bind(window);
-window.fetch = (input, init) => {
-  if (String(input).startsWith('https://api.github.com/')) {
-    return Promise.resolve(new Response(JSON.stringify({ tag_name: `v${q.get('update') ?? '1.0.0'}`, draft: false, prerelease: false })));
-  }
-  return realFetch(input, init);
-};
+// Ultima release: `?update=1.3.0` simula una nuova versione (aggiornamento automatico), altrimenti nessuna.
+// `?update=1.3.0&updatefail` fa fallire l'installazione.
+const mockUpdate = q.get('update');
 
 let folders: Folder[] = [
   { id: 'f1', name: 'Meme', order: 0 },
@@ -210,6 +205,19 @@ mockIPC(
         return null;
       case 'take_ui_requests':
         return uiRequests.splice(0);
+      case 'check_update':
+        return mockUpdate ? { version: mockUpdate, notes: null } : null;
+      case 'install_update': {
+        const total = 8_000_000;
+        for (let d = 0; d <= total; d += 400_000) {
+          await new Promise((r) => setTimeout(r, 60));
+          void emit('update:progress', { downloaded: d, total });
+        }
+        if (q.has('updatefail')) throw { code: 'update_failed', message: 'firma non valida' };
+        await new Promise((r) => setTimeout(r, 800));
+        location.reload();
+        return null;
+      }
       case 'get_diagnostics':
         return {
           version: '1.0.0',

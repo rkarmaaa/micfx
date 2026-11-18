@@ -5,6 +5,7 @@
 
 mod ipc;
 mod tray;
+mod update;
 mod window;
 
 use std::sync::Arc;
@@ -77,11 +78,13 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| window::show(app)))
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--tray"])))
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
             let sink = Arc::new(Sink(app.handle().clone()));
             let core = CoreHandle::start(paths.clone(), sink)?;
             app.manage(core.clone());
             app.manage(window::UiRequests::default());
+            app.manage(update::PendingUpdate::default());
             tray::create(app)?;
             if let Ok(s) = core.get_settings() {
                 ipc::sync_autostart(app.handle(), s.startup.autostart);
@@ -115,6 +118,8 @@ fn main() {
             ipc::open_data_folder,
             ipc::open_link,
             ipc::take_ui_requests,
+            update::check_update,
+            update::install_update,
         ])
         .build(tauri::generate_context!())
         .expect("avvio di MicFX fallito");

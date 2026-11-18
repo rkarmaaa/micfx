@@ -41,7 +41,7 @@
   const TRAY = isMac ? 'nella barra dei menu' : 'nella tray';
 
   // Controllo aggiornamenti manuale, sotto il numero di versione. Se c'è una versione nuova compare
-  // il solito toast con "Scarica".
+  // il solito toast con "Aggiorna ora".
   let updateState = $state<'idle' | 'checking' | 'newer' | 'current' | 'error'>('idle');
   const updateLabel = $derived(
     {
@@ -49,7 +49,7 @@
       checking: 'Controllo…',
       newer: 'Nuova versione disponibile',
       current: 'Sei aggiornato',
-      error: 'GitHub non risponde, riprova',
+      error: 'Controllo non riuscito, riprova',
     }[updateState],
   );
   async function checkUpdate() {

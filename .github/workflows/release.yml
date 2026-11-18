@@ -1,7 +1,9 @@
 name: Release
 
 # Un tag `vX.Y.Z` costruisce l'installer per Windows e l'app per Mac (Apple Silicon) e li allega a una
-# release in bozza con lo stesso nome, insieme agli SHA-256. Le note si scrivono a mano prima di
+# release in bozza con lo stesso nome, insieme agli SHA-256 e a `latest.json` per l'aggiornamento automatico
+# (tauri-plugin-updater: firme .sig con la chiave nei secret TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]).
+# L'app legge `releases/latest/download/latest.json`: l'aggiornamento arriva quando la bozza è pubblicata. Le note si scrivono a mano prima di
 # pubblicare la bozza. Si può rilanciare a mano su un tag esistente: i file vengono sostituiti.
 on:
   push:
@@ -57,13 +59,29 @@ jobs:
             exit 1
           fi
 
+      - name: Chiave dell'aggiornamento automatico
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "Manca il secret TAURI_SIGNING_PRIVATE_KEY: senza firma niente aggiornamento automatico." >&2
+            exit 1
+          fi
+
       - name: Installer Windows
         if: matrix.platform == 'windows'
         shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: ./tools/release/build.ps1 -OutDir release-files
 
       - name: App macOS
         if: matrix.platform == 'macos'
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bash tools/release/build-macos.sh release-files
 
       - uses: actions/upload-artifact@v4
@@ -81,9 +99,36 @@ jobs:
           path: release-files
           merge-multiple: true
 
+      - name: latest.json (aggiornamento automatico)
+        working-directory: release-files
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          node - <<'JS'
+          const fs = require('fs');
+          const tag = process.env.TAG;
+          const v = tag.replace(/^v/, '');
+          const url = (f) => `https://github.com/${process.env.REPO}/releases/download/${tag}/${f}`;
+          const entry = (f) => {
+            if (!fs.existsSync(f) || !fs.existsSync(`${f}.sig`)) throw new Error(`manca ${f} o la sua firma`);
+            return { signature: fs.readFileSync(`${f}.sig`, 'utf8').trim(), url: url(f) };
+          };
+          const latest = {
+            version: v,
+            notes: `MicFX ${v}`,
+            pub_date: new Date().toISOString(),
+            platforms: {
+              'windows-x86_64': entry(`MicFX_${v}_x64-setup.exe`),
+              'darwin-aarch64': entry(`MicFX_${v}_aarch64.app.tar.gz`),
+            },
+          };
+          fs.writeFileSync('latest.json', JSON.stringify(latest, null, 2));
+          JS
+          cat latest.json
+
       - name: SHA-256
         working-directory: release-files
-        run: sha256sum * | tee SHA256SUMS.txt
+        run: sha256sum *.exe *.dmg *.tar.gz | tee SHA256SUMS.txt
 
       - name: Release in bozza
         env:
@@ -100,6 +145,8 @@ jobs:
               echo
               echo "**Mac (Apple Silicon)**: scarica \`MicFX_${TAG#v}_aarch64.dmg\`, aprilo e trascina MicFX in Applicazioni (serve [BlackHole 2ch](https://existential.audio/blackhole/))."
               echo "L'app non è notarizzata da Apple: al primo avvio apri Impostazioni di Sistema → Privacy e sicurezza → **Apri comunque**."
+              echo
+              echo "**Già installato?** MicFX si aggiorna da solo: all'apertura propone la nuova versione, la scarica, la installa e si riapre."
               echo
               echo "## SHA-256"
               echo

@@ -23,6 +23,8 @@ import type { Settings } from './types/Settings';
 import type { Snapshot } from './types/Snapshot';
 import type { Sound } from './types/Sound';
 import type { SoundPatch } from './types/SoundPatch';
+import type { UpdateInfo } from './types/UpdateInfo';
+import type { UpdateProgress } from './types/UpdateProgress';
 
 export type * from './types/ApiError';
 export type * from './types/AppInfo';
@@ -45,6 +47,8 @@ export type * from './types/Settings';
 export type * from './types/Snapshot';
 export type * from './types/Sound';
 export type * from './types/SoundPatch';
+export type * from './types/UpdateInfo';
+export type * from './types/UpdateProgress';
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> | null : T[K] };
 
@@ -105,6 +109,10 @@ export const api = {
   openLink: (which: 'vb-cable' | 'blackhole' | 'discord-voice' | 'discord-app' | 'github' | 'release') => call<void>('open_link', { which }),
   /** Azioni chieste dal menu della tray (es. "check-update"), in attesa: la chiamata svuota la coda. */
   takeUiRequests: () => call<string[]>('take_ui_requests'),
+  /** Aggiornamento automatico: la versione più recente pubblicata, `null` se MicFX è aggiornato. */
+  checkUpdate: () => call<UpdateInfo | null>('check_update'),
+  /** Scarica, verifica la firma, installa e riavvia MicFX (avanzamento con `update:progress`). */
+  installUpdate: () => call<void>('install_update'),
 };
 
 export type EventMap = {
@@ -120,6 +128,8 @@ export type EventMap = {
   notice: Notice;
   /** Dal guscio (tray): ci sono richieste in coda, da ritirare con `takeUiRequests`. */
   'ui:request': null;
+  /** Download dell'aggiornamento in corso (byte). */
+  'update:progress': UpdateProgress;
 };
 
 export function on<K extends keyof EventMap>(name: K, cb: (payload: EventMap[K]) => void): Promise<UnlistenFn> {

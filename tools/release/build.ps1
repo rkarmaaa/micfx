@@ -5,6 +5,10 @@
 # contiene il nome utente di chi l'ha compilato. Il resto dei flag è quello di .cargo/config.toml
 # (CARGO_ENCODED_RUSTFLAGS li sostituisce, non li somma: vanno ripetuti qui).
 #
+# Con TAURI_SIGNING_PRIVATE_KEY (chiave dell'aggiornamento automatico, mai nel repository) firma anche
+# l'installer per l'updater (.exe.sig, vedi tauri.release.conf.json); senza, l'installer resta valido ma
+# non può essere pubblicato come aggiornamento automatico.
+#
 # Uso, dalla radice del repository:  powershell -File tools/release/build.ps1 [-OutDir <cartella>]
 # (la versione per Mac: tools/release/build-macos.sh, su un Mac; le release su GitHub le fa
 # .github/workflows/release.yml per entrambi i sistemi.)
@@ -17,7 +21,12 @@ $env:CARGO_ENCODED_RUSTFLAGS = @(
   "--remap-path-prefix=$($env:USERPROFILE)=~"
 ) -join $sep
 
-npm run build
+if ($env:TAURI_SIGNING_PRIVATE_KEY) {
+  npm run build -- --config src-tauri/tauri.release.conf.json
+} else {
+  Write-Warning 'TAURI_SIGNING_PRIVATE_KEY assente: niente firma per l''aggiornamento automatico.'
+  npm run build
+}
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $exe = Join-Path (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).target_directory 'release\micfx.exe'
@@ -30,5 +39,6 @@ Get-ChildItem (Join-Path (Split-Path $exe) 'bundle\nsis\*.exe') | ForEach-Object
   if ($OutDir) {
     New-Item -ItemType Directory -Force $OutDir | Out-Null
     Copy-Item $_ $OutDir
+    if (Test-Path "$_.sig") { Copy-Item "$_.sig" $OutDir }
   }
 }

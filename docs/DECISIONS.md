@@ -82,9 +82,9 @@ Scelte prese durante lo sviluppo, rispetto a [SPEC.md](SPEC.md). Le più recenti
 
 ## Avviso di nuove versioni
 
-- La UI (non il core) chiede a `api.github.com` l'ultima release pubblicata quando la finestra si apre, al massimo
-  ogni 6 ore (`ui/src/lib/util/update.ts`, CSP `connect-src` aperta solo a quell'host). A riposo nessuna rete:
-  la finestra è effimera. Ogni versione si annuncia una volta sola con un toast; si spegne in Impostazioni →
+- Dalla 1.3.0 il controllo passa dal guscio (`check_update`, vedi "Aggiornamento automatico"); prima la UI
+  chiedeva a `api.github.com`. Sempre quando la finestra si apre, al massimo ogni 6 ore
+  (`ui/src/lib/util/update.ts`). A riposo nessuna rete: la finestra è effimera. Ogni versione si annuncia una volta sola con un toast; si spegne in Impostazioni →
   Avvio e finestra (`ui.prefs.updateNotify`).
 
 ## Ancora da misurare (Fase 0 / Fase 5)
@@ -151,8 +151,26 @@ Scelte prese durante lo sviluppo, rispetto a [SPEC.md](SPEC.md). Le più recenti
   noreply di GitHub prima della pubblicazione; il repository privato originale è `micfx-archivio`.
 - Release su GitHub con l'installer NSIS, compilato con `tools/release/build.ps1`: rustc scrive nei messaggi di
   panic delle dipendenze il percorso `C:\Users\<nome>\.cargo\...`, lo script lo rimappa a `~` e verifica che
-  il nome utente non resti nell'eseguibile. Gli aggiornamenti oggi sono manuali: il nuovo installer chiude MicFX,
-  disinstalla la versione precedente (scelta predefinita) e installa la nuova; i dati non si toccano.
+  il nome utente non resti nell'eseguibile. Fino alla 1.2.2 gli aggiornamenti erano manuali: il nuovo installer chiude
+  MicFX, disinstalla la versione precedente (scelta predefinita) e installa la nuova; i dati non si toccano.
+
+## Aggiornamento automatico (1.3.0)
+
+- `tauri-plugin-updater` nel guscio (`src-tauri/src/update.rs`), non nel core: `check_update` legge
+  `releases/latest/download/latest.json` (solo release pubblicate, non le bozze), `install_update` scarica,
+  verifica la firma minisign (chiave pubblica in `tauri.conf.json`) e installa. Avanzamento con `update:progress`.
+- Windows: installer NSIS in modalità passiva (`/UPDATE`), che chiude MicFX e lo riapre; prima di uscire
+  `on_before_exit` ferma il core come "Esci" (PTT rilasciato). Mac: il bundle `.app` in Applicazioni viene
+  sostituito dal `.app.tar.gz` firmato e MicFX si riavvia. Su Mac resta la firma ad-hoc: niente "Apri comunque"
+  (il file scaricato dall'app non ha la quarantena), ma macOS può chiedere di nuovo i permessi
+  (Accessibilità, Microfono) perché la firma cambia a ogni build.
+- La UI chiede, l'utente decide: il toast "È disponibile MicFX X" ha "Aggiorna ora"; nessuna installazione
+  silenziosa. Se fallisce resta "Scarica" verso la release.
+- Chiave privata fuori dal repository (`~/.tauri/micfx-updater.key`, senza password) e nei secret GitHub
+  `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Persa la chiave, le versioni installate
+  non accettano più aggiornamenti: va conservata con un backup. Le firme si producono solo nelle build di release
+  (`--config src-tauri/tauri.release.conf.json`): `npm run build` funziona anche senza chiave.
+- Le versioni fino alla 1.2.2 non hanno l'updater: per arrivare alla 1.3.0 serve l'ultimo aggiornamento a mano.
 
 ## macOS (Apple Silicon)
 

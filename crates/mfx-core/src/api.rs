@@ -47,6 +47,8 @@ pub enum ErrorCode {
     DiscordFiltersSounds,
     /// Discord è in push-to-talk e il relay PTT di MicFX è spento: i suoni passano solo col tasto premuto.
     DiscordPushToTalk,
+    /// Aggiornamento automatico non riuscito (rete, firma non valida, installazione).
+    UpdateFailed,
     InvalidArgument,
     Internal,
 }
@@ -162,6 +164,24 @@ pub struct AppInfo {
     pub version: String,
     pub data_dir: String,
     pub library_dir: String,
+}
+
+/// Nuova versione trovata dall'aggiornamento automatico (guscio Tauri, `latest.json` dell'ultima release).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UpdateInfo {
+    pub version: String,
+    pub notes: Option<String>,
+}
+
+/// Avanzamento del download di un aggiornamento (evento `update:progress`, in byte).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UpdateProgress {
+    #[ts(type = "number")]
+    pub downloaded: u64,
+    #[ts(type = "number | null")]
+    pub total: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

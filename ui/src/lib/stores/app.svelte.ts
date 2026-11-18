@@ -25,7 +25,7 @@ import {
 } from '../api';
 import { fallbackEmoji, loadEmoji, preloadEmoji, suggestForName } from '../emoji/emoji';
 import { errorText } from '../util/messages';
-import { CHECK_EVERY_MS, isNewer, latestVersion } from '../util/update';
+import { CHECK_EVERY_MS, isNewer } from '../util/update';
 import { dbToPercent, percentToDb } from '../util/volume';
 import { toasts } from './toasts.svelte';
 
@@ -266,6 +266,9 @@ class AppStore {
     void this.checkUpdate();
   }
 
+  /** Aggiornamento automatico in corso: niente secondo clic su "Aggiorna". */
+  updating = $state(false);
+
   /** Cerca una nuova versione su GitHub (al massimo ogni CHECK_EVERY_MS, salvo `manual`) e la annuncia.
    *  L'avviso ricompare a ogni apertura finché l'utente non lo chiude con la X. */
   async checkUpdate(manual = false): Promise<'newer' | 'current' | 'error' | null> {
@@ -275,8 +278,12 @@ class AppStore {
       this.showUpdateToast(false);
       if (!this.prefs.updateNotify || Date.now() - this.prefs.updateCheckedAt < CHECK_EVERY_MS) return null;
     }
-    const latest = await latestVersion();
-    if (!latest) return 'error';
+    let latest: string;
+    try {
+      latest = (await api.checkUpdate())?.version ?? current;
+    } catch {
+      return 'error';
+    }
     this.setPrefs({ updateCheckedAt: Date.now(), updateLatest: latest });
     if (!isNewer(latest, current)) return 'current';
     this.showUpdateToast(manual);
@@ -292,11 +299,40 @@ class AppStore {
       key: 'update',
       kind: 'info',
       title: `È disponibile MicFX ${latest}`,
-      detail: `Hai la ${current}. Installala sopra quella attuale: suoni e impostazioni restano.`,
+      detail: `Hai la ${current}. Si installa da sola e MicFX si riapre: suoni e impostazioni restano.`,
       timeout: 0,
-      actions: [{ label: 'Scarica', run: () => void api.openLink('release').catch((e) => fail(e)) }],
+      actions: [{ label: 'Aggiorna ora', run: () => void this.installUpdate() }],
       onclose: () => this.setPrefs({ updateDismissed: latest }),
     });
+  }
+
+  /** Scarica e installa l'aggiornamento; MicFX si riavvia da solo. Se non riesce resta il download manuale. */
+  async installUpdate() {
+    if (this.updating) return;
+    this.updating = true;
+    const latest = this.prefs.updateLatest;
+    const id = toasts.show({ key: 'update', kind: 'progress', title: `Scarico MicFX ${latest}…`, detail: undefined, actions: [], progress: 0, timeout: 0, onclose: undefined });
+    const un = on('update:progress', (p) => {
+      if (p.total) toasts.update(id, { progress: p.downloaded / p.total });
+      if (p.total && p.downloaded >= p.total) toasts.update(id, { title: 'Installo e riavvio MicFX…' });
+    });
+    try {
+      await api.installUpdate();
+    } catch (e) {
+      toasts.show({
+        key: 'update',
+        kind: 'error',
+        title: 'Aggiornamento non riuscito',
+        detail: 'Puoi scaricare la nuova versione da GitHub e installarla sopra quella attuale.',
+        progress: undefined,
+        timeout: 0,
+        actions: [{ label: 'Scarica', run: () => void api.openLink('release').catch((err) => fail(err)) }],
+      });
+      console.warn(e);
+    } finally {
+      this.updating = false;
+      void un.then((f) => f());
+    }
   }
 
   /** "Non mostrare più" su un avviso: resta nascosto anche ai prossimi avvii. */
@@ -310,7 +346,7 @@ class AppStore {
     if (!reqs.includes('check-update')) return;
     const r = await this.checkUpdate(true);
     if (r === 'current') toasts.show({ key: 'update', kind: 'success', title: 'MicFX è aggiornato', detail: `Hai l'ultima versione, la ${this.info?.version}.` });
-    else if (r === 'error') toasts.show({ key: 'update', kind: 'error', title: 'Controllo non riuscito', detail: 'GitHub non risponde: riprova tra poco.' });
+    else if (r === 'error') toasts.show({ key: 'update', kind: 'error', title: 'Controllo non riuscito', detail: 'Nessuna risposta da GitHub: riprova tra poco.' });
   }
 
   private subscribe() {

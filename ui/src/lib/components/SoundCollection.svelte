@@ -344,6 +344,16 @@
     }
   }
 
+  function onwindowkey(e: KeyboardEvent) {
+    cancelDrag(e);
+    // Focus perso (dopo la selezione a riquadro, un menu chiuso, un clic sullo sfondo…): i tasti arrivano al
+    // body e non al contenitore. Le scorciatoie dei suoni valgono lo stesso. Esc resta ad App (ferma tutto).
+    const overlay = app.menu || app.emojiTarget || app.editorId || app.confirmDelete || app.guideOpen || app.shortcutsOpen || app.settingsOpen || app.capturing;
+    if (!overlay && !e.defaultPrevented && e.key !== 'Escape' && (e.target === document.body || e.target === document.documentElement)) {
+      onkeydown(e);
+    }
+  }
+
   function cancelDrag(e: KeyboardEvent) {
     if (lasso?.active && e.key === 'Escape') {
       e.stopPropagation();
@@ -362,7 +372,7 @@
   const draggedSound = $derived(drag?.active ? app.sound(drag.id) : undefined);
 </script>
 
-<svelte:window onkeydown={cancelDrag} />
+<svelte:window onkeydown={onwindowkey} />
 
 <div
   bind:this={container}

@@ -1,6 +1,7 @@
 <script lang="ts">
   // Barra superiore (#202020): ricerca e azioni principali. Il nome dell'app è già nella barra del titolo di Windows.
   import { kb } from '../util/platform';
+  import Keys from './Keys.svelte';
   import { CircleHelp, Pause, Plus, Search, Settings, Square, X } from '../icons';
   import { app } from '../stores/app.svelte';
 
@@ -48,7 +49,7 @@
         }}><X size={14} /></button
       >
     {:else}
-      <kbd class="hint" aria-hidden="true">{kb('Ctrl F')}</kbd>
+      <kbd class="hint" aria-hidden="true"><Keys text="Ctrl F" /></kbd>
     {/if}
   </div>
 

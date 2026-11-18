@@ -92,10 +92,15 @@
       if (e.target === container) app.selection.clear();
       return;
     }
-    // L'unica azione sul riquadro è Ferma: le altre stanno nel menu del tasto destro.
+    // Sul riquadro solo Ferma e Ascolta solo tu: le altre azioni stanno nel menu del tasto destro.
     if ((e.target as HTMLElement).closest('[data-action="stop"]')) {
       e.stopPropagation();
       app.stop(id);
+      return;
+    }
+    if ((e.target as HTMLElement).closest('[data-action="preview"]')) {
+      e.stopPropagation();
+      app.preview(id);
       return;
     }
     if (app.renamingId === id) return;

@@ -3,6 +3,7 @@
   // scorciatoie, suoni, generale, informazioni. Sezioni nel menu a sinistra (seguono lo scorrimento);
   // ogni riga ha titolo e spiegazione a sinistra e il controllo a destra. Esc o la freccia tornano ai suoni.
   import { onMount, type Component } from 'svelte';
+  import Keys from './Keys.svelte';
 
   import { api, type Diagnostics, type HotkeyAction, type PlayMode } from '../api';
   import {
@@ -27,8 +28,8 @@
   } from '../icons';
   import { app } from '../stores/app.svelte';
   import { cableOptions, micOptions, monitorOptions } from '../util/devices';
-  import { formatAccelerator, singleKeyFromEvent } from '../util/keys';
-  import { CABLE_NAME, isMac, kb } from '../util/platform';
+  import { singleKeyFromEvent } from '../util/keys';
+  import { CABLE_NAME, isMac } from '../util/platform';
   import HotkeyInput from './HotkeyInput.svelte';
   import Select from './Select.svelte';
   import Switch from './Switch.svelte';
@@ -408,7 +409,7 @@
                   {#if capturingPtt}
                     <span class="hint">Premi il tasto…</span>
                   {:else if s.ptt.key}
-                    <kbd>{formatAccelerator(s.ptt.key)}</kbd>
+                    <kbd><Keys acc={s.ptt.key} /></kbd>
                   {:else}
                     <span class="none">Scegli tasto</span>
                   {/if}
@@ -466,7 +467,7 @@
           <h2 id="h-hotkeys">Scorciatoie</h2>
           <p class="lead">
             Funzionano ovunque, anche con MicFX {TRAY} e nei giochi. Quelle dei singoli suoni si impostano dal suono, con
-            <kbd>{kb('Ctrl')}</kbd> <kbd>{kb('Invio')}</kbd>.
+            <kbd><Keys text="Ctrl" /></kbd> <kbd><Keys text="Invio" /></kbd>.
           </p>
           <div class="card">
             {#each GLOBAL as g (g.action.type)}

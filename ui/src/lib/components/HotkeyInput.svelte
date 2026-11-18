@@ -3,6 +3,7 @@
   // Durante la cattura le hotkey globali sono in pausa, altrimenti il sistema le "ruberebbe".
   // Su Mac ⌘ è registrato come modificatore "Win" del core (Command).
   import { isMac } from '../util/platform';
+  import Keys from './Keys.svelte';
   import type { HotkeyAction } from '../api';
   import { TriangleAlert, X } from '../icons';
   import { app } from '../stores/app.svelte';
@@ -15,7 +16,7 @@
   }: { action: HotkeyAction; label?: string; compact?: boolean } = $props();
 
   let capturing = $state(false);
-  let partial = $state('');
+  let partial = $state<{ display: string; acc?: string } | null>(null);
   let pending = $state<{ accelerator: string; owner: string } | null>(null);
   let warn = $state('');
   let button: HTMLButtonElement;
@@ -44,14 +45,14 @@
   async function start() {
     pending = null;
     warn = '';
-    partial = '';
+    partial = null;
     capturing = true;
     await app.beginCapture();
   }
 
   async function stop() {
     capturing = false;
-    partial = '';
+    partial = null;
     await app.endCapture();
   }
 
@@ -68,7 +69,7 @@
     e.stopPropagation();
     const c = captureFromEvent(e);
     if (c.kind === 'partial') {
-      partial = c.display;
+      partial = c;
       return;
     }
     if (c.kind === 'cancel') return stop();
@@ -101,9 +102,9 @@
     onblur={() => capturing && stop()}
   >
     {#if capturing}
-      <span class="hint">{partial || 'Premi la combinazione…'}</span>
+      <span class="hint">{#if partial?.acc}<Keys acc={partial.acc} />{:else}{partial?.display ?? 'Premi la combinazione…'}{/if}</span>
     {:else if current}
-      <kbd>{formatAccelerator(current.accelerator)}</kbd>
+      <kbd><Keys acc={current.accelerator} /></kbd>
       {#if current.conflict}<span class="badge"><TriangleAlert size={14} /></span>{/if}
     {:else}
       <span class="none">Nessuna</span>
@@ -121,7 +122,7 @@
 {/if}
 {#if pending}
   <div class="confirm" role="alertdialog" aria-label="Scorciatoia già in uso">
-    <span><kbd>{formatAccelerator(pending.accelerator)}</kbd> è già usata da {pending.owner}. Spostarla qui?</span>
+    <span><kbd><Keys acc={pending.accelerator} /></kbd> è già usata da {pending.owner}. Spostarla qui?</span>
     <button type="button" class="primary sm" onclick={() => commit(pending!.accelerator)}>Sposta</button>
     <button type="button" class="sm" onclick={() => (pending = null)}>Annulla</button>
   </div>

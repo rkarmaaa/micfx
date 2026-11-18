@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Hotkey, PlayMode, Playing, Sound } from '../api';
+  import Keys from './Keys.svelte';
   import { CircleDot, Headphones, Layers, RotateCcw, Square, ToggleRight } from '../icons';
   import { soundEmoji } from '../stores/app.svelte';
   import { formatAccelerator } from '../util/keys';
@@ -128,10 +129,16 @@
 
   {#if hotkey}
     <kbd class="hk" class:conflict={hotkey.conflict}
-      >{formatAccelerator(hotkey.accelerator)}</kbd
+      ><Keys acc={hotkey.accelerator} /></kbd
     >
   {/if}
 
+  {#if view === 'grid' && !renaming}
+    <!-- In hover: ascolta solo tu (anteprima in cuffia), come Maiusc+Invio. -->
+    <button type="button" class="act listen" data-action="preview" tabindex="-1" aria-label="Ascolta {sound.name} solo tu" title="Ascolta solo tu"
+      ><Headphones size={14} /></button
+    >
+  {/if}
   {#if playing}
     <div class="actions">
       <button type="button" class="act" data-action="stop" aria-label="Ferma {sound.name}"><Square size={12} fill="currentColor" /></button>
@@ -298,6 +305,34 @@
     overflow: hidden;
     text-overflow: ellipsis;
     z-index: 1;
+  }
+  /* Cuffie in alto a sinistra, solo in hover: la scorciatoia si sposta a destra per farle posto. */
+  .grid .listen {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity var(--t-fast) var(--ease);
+  }
+  .grid:hover .listen {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .grid .listen:hover {
+    color: var(--fg);
+  }
+  .grid .hk {
+    transition: transform var(--t-fast) var(--ease);
+  }
+  .grid:hover .hk {
+    transform: translateX(28px);
+    max-width: calc(100% - 42px);
   }
   .grid .actions {
     position: absolute;

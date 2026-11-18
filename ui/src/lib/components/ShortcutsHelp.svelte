@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { isMac, kb } from '../util/platform';
+  import { isMac } from '../util/platform';
+  import Keys from './Keys.svelte';
   import Modal from './Modal.svelte';
 
   let { onclose }: { onclose: () => void } = $props();
@@ -33,7 +34,7 @@
   <table>
     <tbody>
       {#each rows as [k, v]}
-        <tr><td><kbd>{kb(k)}</kbd></td><td>{v}</td></tr>
+        <tr><td><kbd><Keys text={k} /></kbd></td><td>{v}</td></tr>
       {/each}
     </tbody>
   </table>

@@ -39,7 +39,7 @@ const NAME_TO_CODE: Record<string, string> = (() => {
 })();
 
 export type Captured =
-  | { kind: 'partial'; display: string }
+  | { kind: 'partial'; display: string; acc?: string }
   | { kind: 'done'; accelerator: string; noModifiers: boolean }
   | { kind: 'cancel' }
   | { kind: 'clear' };
@@ -52,7 +52,7 @@ export function captureFromEvent(e: KeyboardEvent): Captured {
   if (e.shiftKey) mods.push('Shift');
   if (e.metaKey) mods.push('Win');
   if (MODIFIER_CODES.has(e.code)) {
-    return { kind: 'partial', display: mods.length ? formatParts([...mods, '…']) : '…' };
+    return { kind: 'partial', display: mods.length ? formatParts([...mods, '…']) : '…', acc: [...mods, '…'].join('+') };
   }
   if (mods.length === 0 && e.code === 'Escape') return { kind: 'cancel' };
   if (mods.length === 0 && (e.code === 'Backspace' || e.code === 'Delete')) return { kind: 'clear' };

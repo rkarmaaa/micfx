@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { kb } from '../util/platform';
+  import Keys from './Keys.svelte';
   import {
     Check,
     ChevronDown,
@@ -113,10 +113,10 @@
 >
   {#if one}
     <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => app.play(one.id))}
-      ><Play /><span>Riproduci</span><kbd>Invio</kbd></button
+      ><Play /><span>Riproduci</span><kbd><Keys text="Invio" /></kbd></button
     >
     <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => app.preview(one.id))}
-      ><Headphones /><span>Ascolta solo tu</span><kbd>{kb('Maiusc+Invio')}</kbd></button
+      ><Headphones /><span>Ascolta solo tu</span><kbd><Keys text="Maiusc+Invio" /></kbd></button
     >
     {#if playing}
       <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => app.stop(one.id))}><Square /><span>Ferma</span></button>
@@ -132,18 +132,18 @@
       onclick={() => {
         const p = emojiAt();
         run(() => (app.emojiTarget = { soundId: one.id, ...p }));
-      }}><Smile /><span>Cambia emoji</span><kbd>{kb('Ctrl+E')}</kbd></button
+      }}><Smile /><span>Cambia emoji</span><kbd><Keys text="Ctrl+E" /></kbd></button
     >
     <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => (app.editorId = one.id))}
-      ><SlidersHorizontal /><span>Scorciatoia, volume e modalità…</span><kbd>{kb('Ctrl+Invio')}</kbd></button
+      ><SlidersHorizontal /><span>Scorciatoia, volume e modalità…</span><kbd><Keys text="Ctrl+Invio" /></kbd></button
     >
   {:else}
     <div class="menu-label">{ids.length} suoni selezionati</div>
     <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => ids.forEach((id) => app.play(id)))}
-      ><Play /><span>Riproduci tutti insieme</span><kbd>Invio</kbd></button
+      ><Play /><span>Riproduci tutti insieme</span><kbd><Keys text="Invio" /></kbd></button
     >
     <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => ids.forEach((id) => app.preview(id)))}
-      ><Headphones /><span>Ascolta tutti solo tu</span><kbd>{kb('Maiusc+Invio')}</kbd></button
+      ><Headphones /><span>Ascolta tutti solo tu</span><kbd><Keys text="Maiusc+Invio" /></kbd></button
     >
     {#if playing}
       <button role="menuitem" type="button" class="menu-item" onclick={() => run(() => ids.forEach((id) => app.stop(id)))}

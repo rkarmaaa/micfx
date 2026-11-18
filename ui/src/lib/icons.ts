@@ -61,3 +61,59 @@ export { default as Trash } from '@lucide/svelte/icons/trash';
 export { default as TriangleAlert } from '@lucide/svelte/icons/triangle-exclamation-point';
 export { default as Volleyball } from '@lucide/svelte/icons/volleyball';
 export { default as X } from '@lucide/svelte/icons/x';
+
+// --- Tasti (componente Keys): nome del core → icone. "Mac*" sono i modificatori di macOS. ---
+import type { Component } from 'svelte';
+import ArrowBigUp from '@lucide/svelte/icons/arrow-big-up';
+import ArrowBigUpDash from '@lucide/svelte/icons/arrow-big-up-dash';
+import ArrowDown from '@lucide/svelte/icons/arrow-down';
+import ArrowDownRight from '@lucide/svelte/icons/arrow-down-right';
+import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
+import ArrowRight from '@lucide/svelte/icons/arrow-right';
+import ArrowRightToLine from '@lucide/svelte/icons/arrow-right-to-line';
+import ArrowUp from '@lucide/svelte/icons/arrow-up';
+import ArrowUpLeft from '@lucide/svelte/icons/arrow-up-left';
+import ChevronUp from '@lucide/svelte/icons/chevron-up';
+import ChevronsDown from '@lucide/svelte/icons/chevrons-down';
+import ChevronsUp from '@lucide/svelte/icons/chevrons-up';
+import Command from '@lucide/svelte/icons/command';
+import CornerDownLeft from '@lucide/svelte/icons/corner-down-left';
+import Delete from '@lucide/svelte/icons/delete';
+import Option from '@lucide/svelte/icons/option';
+import PauseIcon from '@lucide/svelte/icons/pause';
+import PlayIcon from '@lucide/svelte/icons/play';
+import SkipBack from '@lucide/svelte/icons/skip-back';
+import SkipForward from '@lucide/svelte/icons/skip-forward';
+import SpaceIcon from '@lucide/svelte/icons/space';
+import SquareIcon from '@lucide/svelte/icons/square';
+import Volume1 from '@lucide/svelte/icons/volume-1';
+import Volume2 from '@lucide/svelte/icons/volume-2';
+import VolumeX from '@lucide/svelte/icons/volume-x';
+
+export const KEY_ICONS: Record<string, Component[]> = {
+  Shift: [ArrowBigUp],
+  CapsLock: [ArrowBigUpDash],
+  Enter: [CornerDownLeft],
+  Backspace: [Delete],
+  Tab: [ArrowRightToLine],
+  Space: [SpaceIcon],
+  Up: [ArrowUp],
+  Down: [ArrowDown],
+  Left: [ArrowLeftIcon],
+  Right: [ArrowRight],
+  Home: [ArrowUpLeft],
+  End: [ArrowDownRight],
+  PageUp: [ChevronsUp],
+  PageDown: [ChevronsDown],
+  MediaPlayPause: [PlayIcon, PauseIcon],
+  MediaStop: [SquareIcon],
+  MediaTrackNext: [SkipForward],
+  MediaTrackPrevious: [SkipBack],
+  AudioVolumeMute: [VolumeX],
+  AudioVolumeDown: [Volume1],
+  AudioVolumeUp: [Volume2],
+  MacShift: [ArrowBigUp],
+  MacCtrl: [ChevronUp],
+  MacAlt: [Option],
+  MacWin: [Command],
+};
